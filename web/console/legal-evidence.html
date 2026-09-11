@@ -6,18 +6,31 @@
     <link rel="stylesheet" href="assets/console.css">
 </head>
 <body>
-    <header class="topbar">
-        <div class="brand">TSI Sign</div>
-        <nav>
-            <a href="apps.html">Apps</a>
-            <a href="legal-evidence.html" class="active">Legal Evidence</a>
-            <a href="platform-users.html" class="platform-admin-only">Platform Users</a>
-            <span id="topbar-user" class="muted" style="margin-right:16px;"></span>
-            <a href="#" onclick="logout(); return false;">Log out</a>
-        </nav>
+    <header class="mobilebar">
+        <a class="brand" href="apps.html"><span class="mark">TS</span><span>TSI Sign</span></a>
     </header>
+    <div class="app">
+        <aside class="side">
+            <a class="brand" href="apps.html"><span class="mark">TS</span><span>TSI Sign</span></a>
+            <nav class="nav">
+                <a href="apps.html">Apps</a>
+                <a href="legal-evidence.html" class="active">Legal Evidence</a>
+                <a href="platform-users.html" class="platform-admin-only">Platform Users</a>
+            </nav>
+            <div class="side-foot">
+                <div class="side-user-row">
+                    <div id="sidebar-user-avatar" class="avatar">–</div>
+                    <div style="min-width:0; flex:1;">
+                        <div id="sidebar-user-name" class="side-user-name"></div>
+                        <div id="sidebar-user-role" class="side-user-role"></div>
+                    </div>
+                </div>
+                <a href="#" onclick="logout(); return false;" class="signout">Sign Out</a>
+            </div>
+        </aside>
 
-    <main>
+        <main class="main">
+        <div class="eyebrow">Admin Console</div>
         <h1>Legal Evidence</h1>
         <p class="subtitle">Every BSA &sect;63 Part A/B certificate issued across all Apps.</p>
 
@@ -29,7 +42,8 @@
                 <tbody id="registry-body"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
             </table>
         </div>
-    </main>
+        </main>
+    </div>
 
     <script src="assets/console.js"></script>
     <script>
