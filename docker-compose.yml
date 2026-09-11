@@ -1,0 +1,69 @@
+# TSI Sign - Docker Compose
+#
+# Host ports default to 5440 (Postgres) / 8088 (app) — several other TSI
+# products (tsi-dpdp-cms, tsi-nexus, tsi-compass, tsi-privacy-vault,
+# tsi-ledger, relicredit) commonly run side by side on the same evaluation
+# host and already claim 5432-5439 / 8080-8087. Override via DB_PORT_MAP /
+# APP_PORT_MAP in .env if these also collide with something on your machine.
+
+x-db-credentials: &db-credentials
+  POSTGRES_DB: "${POSTGRES_DB:-tsi_sign}"
+  POSTGRES_USER: "${POSTGRES_USER:-tsi_sign_admin}"
+  POSTGRES_PASSWORD: "${POSTGRES_PASSWD:-secure_dev_password}"
+
+services:
+  postgres_db:
+    image: postgres:15-alpine
+    container_name: tsi_sign_postgres
+    restart: unless-stopped
+    environment:
+      <<: *db-credentials
+    ports:
+      - "${DB_PORT_MAP:-5440:5432}"
+    volumes:
+      - sign_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sign_network
+
+  jetty_app:
+    image: "${APP_IMAGE:-tsicoop/tsi-sign:latest}"
+    # Uncomment to build from local source instead of pulling the image above:
+    #build:
+    #    context: .
+    #    dockerfile: Dockerfile
+    container_name: tsi_sign_engine
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT_MAP:-8088:8080}"
+    environment:
+      POSTGRES_HOST: "jdbc:postgresql://postgres_db:5432"
+      POSTGRES_DB: "${POSTGRES_DB:-tsi_sign}"
+      POSTGRES_USER: "${POSTGRES_USER:-tsi_sign_admin}"
+      POSTGRES_PASSWD: "${POSTGRES_PASSWD:-secure_dev_password}"
+      TSI_SIGN_ENV: "${TSI_SIGN_ENV:-local}"
+      STORAGE_LOCAL_FS_PATH: "${STORAGE_LOCAL_FS_PATH:-/data/tsi-sign/documents}"
+      KEYSTORE_PATH: "${KEYSTORE_PATH:-/etc/tsi-sign/keystore.p12}"
+      KEYSTORE_TYPE: "${KEYSTORE_TYPE:-PKCS12}"
+      KEYSTORE_PASSWORD: "${KEYSTORE_PASSWORD:-changeit}"
+    volumes:
+      - sign_documents:/data/tsi-sign/documents
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    networks:
+      - sign_network
+
+networks:
+  sign_network:
+    driver: bridge
+
+volumes:
+  sign_data:
+    driver: local
+  sign_documents:
+    driver: local

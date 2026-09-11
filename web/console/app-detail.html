@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>App Detail — TSI Sign Admin Console</title>
+    <link rel="stylesheet" href="assets/console.css">
+</head>
+<body>
+    <header class="topbar">
+        <div class="brand">TSI Sign</div>
+        <nav>
+            <a href="apps.html">Apps</a>
+            <a href="legal-evidence.html">Legal Evidence</a>
+            <a href="platform-users.html" class="platform-admin-only">Platform Users</a>
+            <span id="topbar-user" class="muted" style="margin-right:16px;"></span>
+            <a href="#" onclick="logout(); return false;">Log out</a>
+        </nav>
+    </header>
+
+    <main>
+        <p class="subtitle"><a href="apps.html">&larr; Apps</a></p>
+        <h1 id="app-title">Loading…</h1>
+        <p class="subtitle" id="app-slug"></p>
+
+        <div id="notice" class="notice error" style="display:none;"></div>
+
+        <div class="tabs">
+            <button class="active" data-tab="overview">Overview</button>
+            <button data-tab="keys">API Keys</button>
+            <button data-tab="signing">Signing Defaults</button>
+            <button data-tab="templates">Templates</button>
+            <button data-tab="documents">Documents</button>
+            <button data-tab="admins">Admins</button>
+        </div>
+
+        <div class="tab-panel active" id="tab-overview">
+            <div class="panel" id="overview-panel">Loading…</div>
+            <div class="panel">
+                <h2 style="margin-top:0;">Rate Limit</h2>
+                <form id="rate-limit-form">
+                    <label>Requests per minute (blank = unlimited)</label>
+                    <input type="text" id="rate-limit-rpm" placeholder="unlimited" inputmode="numeric" pattern="[0-9]*">
+                    <div style="margin-top:16px;"><button type="submit">Save</button></div>
+                </form>
+                <div id="rate-limit-notice" class="notice success" style="display:none;"></div>
+            </div>
+        </div>
+
+        <div class="tab-panel" id="tab-keys">
+            <div class="panel">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <h2 style="margin:0;">API Keys</h2>
+                    <button id="issue-key-btn">Issue New Key</button>
+                </div>
+                <div id="new-key-notice" class="notice key" style="display:none;"></div>
+                <table style="margin-top:12px;">
+                    <thead><tr><th>Prefix</th><th>Status</th><th>Created</th><th>Revoked</th><th></th></tr></thead>
+                    <tbody id="keys-body"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="tab-panel" id="tab-signing">
+            <div class="panel">
+                <h2 style="margin-top:0;">Signing Defaults</h2>
+                <form id="signing-form">
+                    <label>Default provider ID</label>
+                    <input type="text" id="signing-provider" placeholder="local_pki">
+                    <label>Default key alias</label>
+                    <input type="text" id="signing-key-alias" placeholder="tsi_corporate_seal">
+                    <label>Webhook URL</label>
+                    <input type="text" id="signing-webhook" placeholder="https://...">
+                    <div style="margin-top:16px;"><button type="submit">Save</button></div>
+                </form>
+                <div id="signing-notice" class="notice success" style="display:none;"></div>
+            </div>
+        </div>
+
+        <div class="tab-panel" id="tab-templates">
+            <div class="panel">
+                <h2 style="margin-top:0;">Templates</h2>
+                <table>
+                    <thead><tr><th>Name</th><th>Category</th><th>Version</th><th></th></tr></thead>
+                    <tbody id="templates-body"><tr><td colspan="4" class="muted">Loading…</td></tr></tbody>
+                </table>
+            </div>
+
+            <div class="panel">
+                <h2 style="margin-top:0;">New Template</h2>
+                <form id="template-form">
+                    <div class="row">
+                        <div>
+                            <label>Template name</label>
+                            <input type="text" id="template-name" required placeholder="Sanction Letter">
+                        </div>
+                        <div>
+                            <label>Category (optional)</label>
+                            <input type="text" id="template-category" placeholder="LOAN">
+                        </div>
+                    </div>
+                    <label>HTML content (use {{field}} placeholders)</label>
+                    <textarea id="template-html" required>&lt;!DOCTYPE html&gt;
+&lt;html&gt;&lt;body&gt;
+  &lt;h1&gt;Agreement for {{borrower_name}}&lt;/h1&gt;
+&lt;/body&gt;&lt;/html&gt;</textarea>
+                    <div style="margin-top:16px;"><button type="submit">Create Template</button></div>
+                </form>
+            </div>
+
+            <div class="panel" id="preview-panel" style="display:none;">
+                <h2 style="margin-top:0;">Generate Test Document — <span id="preview-template-name"></span></h2>
+                <p class="muted">Renders a sample PDF from this JSON payload without saving a document.</p>
+                <label>Sample payload (JSON)</label>
+                <textarea id="preview-payload">{ "borrower_name": "Test Borrower" }</textarea>
+                <div style="margin-top:16px;">
+                    <button id="preview-generate-btn">Generate</button>
+                    <button class="secondary" id="preview-cancel-btn" type="button">Cancel</button>
+                </div>
+                <div id="preview-notice" class="notice error" style="display:none;"></div>
+            </div>
+        </div>
+
+        <div class="tab-panel" id="tab-documents">
+            <div class="panel">
+                <h2 style="margin-top:0;">Documents</h2>
+                <table>
+                    <thead><tr><th>Title</th><th>Template</th><th>Status</th><th>Created</th></tr></thead>
+                    <tbody id="documents-body"><tr><td colspan="4" class="muted">Loading…</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="tab-panel" id="tab-admins">
+            <div class="panel">
+                <h2 style="margin-top:0;">Admins</h2>
+                <p class="muted">Platform users (APP_MANAGER) assigned to administer this App (§4.2, app_admins).</p>
+                <table>
+                    <thead><tr><th>Name</th><th>Email</th><th></th></tr></thead>
+                    <tbody id="admins-body"><tr><td colspan="3" class="muted">Loading…</td></tr></tbody>
+                </table>
+                <div class="row" style="margin-top:16px; align-items:flex-end;">
+                    <div>
+                        <label>Add an existing platform user</label>
+                        <select id="admin-user-select"></select>
+                    </div>
+                    <div style="flex:0;">
+                        <button id="add-admin-btn">Add</button>
+                    </div>
+                </div>
+                <div id="admins-notice" class="notice error" style="display:none; margin-top:12px;"></div>
+            </div>
+        </div>
+    </main>
+
+    <script src="assets/console.js"></script>
+    <script>
+        const appId = qs("appId");
+        const notice = document.getElementById("notice");
+        loadTopbar();
+
+        document.querySelectorAll(".tabs button").forEach(btn => {
+            btn.addEventListener("click", () => {
+                document.querySelectorAll(".tabs button").forEach(b => b.classList.remove("active"));
+                document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+                btn.classList.add("active");
+                document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
+            });
+        });
+
+        async function loadOverview() {
+            const app = await apiJson("/api/v1/admin/apps/" + appId);
+            document.getElementById("app-title").textContent = app.appName;
+            document.getElementById("app-slug").textContent = app.appSlug;
+            document.getElementById("overview-panel").innerHTML = `
+                <table>
+                    <tr><th>App ID</th><td>${escapeHtml(app.appId)}</td></tr>
+                    <tr><th>Slug</th><td>${escapeHtml(app.appSlug)}</td></tr>
+                    <tr><th>Status</th><td><span class="badge ${app.isActive ? "active" : "inactive"}">${app.isActive ? "Active" : "Inactive"}</span></td></tr>
+                    <tr><th>Default provider</th><td>${escapeHtml(app.defaultProviderId) || '<span class="muted">—</span>'}</td></tr>
+                    <tr><th>Default key alias</th><td>${escapeHtml(app.defaultKeyAlias) || '<span class="muted">—</span>'}</td></tr>
+                    <tr><th>Storage backend</th><td class="muted">deployment default (local_fs)</td></tr>
+                    <tr><th>Created</th><td>${escapeHtml(app.createdAt)}</td></tr>
+                </table>`;
+            document.getElementById("signing-provider").value = app.defaultProviderId || "";
+            document.getElementById("signing-key-alias").value = app.defaultKeyAlias || "";
+            document.getElementById("signing-webhook").value = app.webhookUrl || "";
+            document.getElementById("rate-limit-rpm").value = app.rateLimitRpm != null ? app.rateLimitRpm : "";
+        }
+
+        document.getElementById("rate-limit-form").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const rateLimitNotice = document.getElementById("rate-limit-notice");
+            const raw = document.getElementById("rate-limit-rpm").value.trim();
+            try {
+                await apiJson("/api/v1/admin/apps/" + appId + "/rate-limit", {
+                    method: "POST",
+                    body: JSON.stringify({ rateLimitRpm: raw === "" ? null : parseInt(raw, 10) })
+                });
+                showNotice(rateLimitNotice, "Saved.", "success");
+            } catch (err) {
+                showNotice(rateLimitNotice, err.message, "error");
+            }
+        });
+
+        async function loadKeys() {
+            const keys = await apiJson("/api/v1/admin/apps/" + appId + "/keys");
+            const body = document.getElementById("keys-body");
+            body.innerHTML = keys.length === 0
+                ? '<tr><td colspan="5" class="muted">No keys yet.</td></tr>'
+                : keys.map(k => `
+                    <tr>
+                        <td>${escapeHtml(k.keyPrefix)}…</td>
+                        <td><span class="badge ${k.isActive ? "active" : "inactive"}">${k.isActive ? "Active" : "Revoked"}</span></td>
+                        <td class="muted">${escapeHtml(k.createdAt)}</td>
+                        <td class="muted">${escapeHtml(k.revokedAt) || "—"}</td>
+                        <td>${k.isActive ? `<button class="danger" onclick="revokeKey('${k.keyId}')">Revoke</button>` : ""}</td>
+                    </tr>`).join("");
+        }
+
+        async function revokeKey(keyId) {
+            if (!confirm("Revoke this key? This cannot be undone.")) return;
+            try {
+                await apiJson("/api/v1/admin/apps/" + appId + "/keys/" + keyId + "/revoke", { method: "POST" });
+                loadKeys();
+            } catch (err) {
+                showNotice(notice, err.message);
+            }
+        }
+
+        document.getElementById("issue-key-btn").addEventListener("click", async () => {
+            try {
+                const result = await apiJson("/api/v1/admin/apps/" + appId + "/keys", { method: "POST" });
+                const keyNotice = document.getElementById("new-key-notice");
+                keyNotice.style.display = "block";
+                keyNotice.textContent = "New API key (shown once): " + result.apiKey;
+                loadKeys();
+            } catch (err) {
+                showNotice(notice, err.message);
+            }
+        });
+
+        document.getElementById("signing-form").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const signingNotice = document.getElementById("signing-notice");
+            try {
+                await apiJson("/api/v1/admin/apps/" + appId + "/signing-defaults", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        defaultProviderId: document.getElementById("signing-provider").value || null,
+                        defaultKeyAlias: document.getElementById("signing-key-alias").value || null,
+                        webhookUrl: document.getElementById("signing-webhook").value || null
+                    })
+                });
+                showNotice(signingNotice, "Saved.", "success");
+                loadOverview();
+            } catch (err) {
+                showNotice(signingNotice, err.message, "error");
+            }
+        });
+
+        let templatesCache = [];
+
+        async function loadTemplates() {
+            templatesCache = await apiJson("/api/v1/admin/apps/" + appId + "/templates");
+            const body = document.getElementById("templates-body");
+            body.innerHTML = templatesCache.length === 0
+                ? '<tr><td colspan="4" class="muted">No templates yet.</td></tr>'
+                : templatesCache.map(t => `
+                    <tr>
+                        <td>${escapeHtml(t.templateName)}</td>
+                        <td>${escapeHtml(t.category) || "—"}</td>
+                        <td>${t.version}</td>
+                        <td><button class="secondary" onclick="openPreview('${t.templateId}')">Generate Test Document</button></td>
+                    </tr>`).join("");
+        }
+
+        document.getElementById("template-form").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            try {
+                await apiJson("/api/v1/admin/apps/" + appId + "/templates", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        templateName: document.getElementById("template-name").value,
+                        category: document.getElementById("template-category").value || null,
+                        htmlContent: document.getElementById("template-html").value
+                    })
+                });
+                document.getElementById("template-form").reset();
+                loadTemplates();
+            } catch (err) {
+                showNotice(notice, err.message);
+            }
+        });
+
+        let previewTemplateId = null;
+
+        function openPreview(templateId) {
+            previewTemplateId = templateId;
+            const t = templatesCache.find(x => x.templateId === templateId);
+            document.getElementById("preview-template-name").textContent = t ? t.templateName : "";
+            document.getElementById("preview-panel").style.display = "block";
+            document.getElementById("preview-panel").scrollIntoView({ behavior: "smooth" });
+        }
+
+        document.getElementById("preview-cancel-btn").addEventListener("click", () => {
+            document.getElementById("preview-panel").style.display = "none";
+        });
+
+        document.getElementById("preview-generate-btn").addEventListener("click", async () => {
+            const previewNotice = document.getElementById("preview-notice");
+            showNotice(previewNotice, "");
+            let payloadData;
+            try {
+                payloadData = JSON.parse(document.getElementById("preview-payload").value);
+            } catch (e) {
+                showNotice(previewNotice, "Sample payload must be valid JSON.");
+                return;
+            }
+            try {
+                const res = await apiFetch(
+                    "/api/v1/admin/apps/" + appId + "/templates/" + previewTemplateId + "/preview",
+                    { method: "POST", body: JSON.stringify({ payloadData: payloadData }) }
+                );
+                if (!res.ok) {
+                    const body = await res.json().catch(() => ({}));
+                    throw new Error(body.message || res.statusText);
+                }
+                const blob = await res.blob();
+                window.open(URL.createObjectURL(blob), "_blank");
+            } catch (err) {
+                showNotice(previewNotice, err.message);
+            }
+        });
+
+        async function loadDocuments() {
+            const documents = await apiJson("/api/v1/admin/apps/" + appId + "/documents");
+            const body = document.getElementById("documents-body");
+            body.innerHTML = documents.length === 0
+                ? '<tr><td colspan="4" class="muted">No documents yet — generate one from a template via the API, or use "Generate Test Document" above (test documents are not saved).</td></tr>'
+                : documents.map(d => `
+                    <tr>
+                        <td><a href="document-detail.html?appId=${encodeURIComponent(appId)}&documentId=${encodeURIComponent(d.documentId)}">${escapeHtml(d.title)}</a></td>
+                        <td>${escapeHtml(d.templateName) || '<span class="muted">—</span>'}</td>
+                        <td><span class="badge ${d.status === "SIGNED" ? "active" : "inactive"}">${escapeHtml(d.status)}</span></td>
+                        <td class="muted">${escapeHtml(d.createdAt)}</td>
+                    </tr>`).join("");
+        }
+
+        async function loadAdmins() {
+            const [admins, allUsers] = await Promise.all([
+                apiJson("/api/v1/admin/apps/" + appId + "/admins"),
+                apiJson("/api/v1/admin/platform-users").catch(() => [])
+            ]);
+
+            const body = document.getElementById("admins-body");
+            body.innerHTML = admins.length === 0
+                ? '<tr><td colspan="3" class="muted">No admins assigned.</td></tr>'
+                : admins.map(a => `
+                    <tr>
+                        <td>${escapeHtml(a.fullName)}</td>
+                        <td>${escapeHtml(a.email)}</td>
+                        <td><button class="danger" onclick="removeAdmin('${a.userId}')">Remove</button></td>
+                    </tr>`).join("");
+
+            const select = document.getElementById("admin-user-select");
+            const assignedIds = new Set(admins.map(a => a.userId));
+            const candidates = allUsers.filter(u => u.role === "APP_MANAGER" && !assignedIds.has(u.userId));
+            select.innerHTML = candidates.length === 0
+                ? '<option value="">No available APP_MANAGER users</option>'
+                : candidates.map(u => `<option value="${escapeHtml(u.userId)}">${escapeHtml(u.fullName)} (${escapeHtml(u.email)})</option>`).join("");
+        }
+
+        document.getElementById("add-admin-btn").addEventListener("click", async () => {
+            const userId = document.getElementById("admin-user-select").value;
+            const adminsNotice = document.getElementById("admins-notice");
+            if (!userId) {
+                showNotice(adminsNotice, "Select a user first.");
+                return;
+            }
+            try {
+                await apiJson("/api/v1/admin/apps/" + appId + "/admins", {
+                    method: "POST",
+                    body: JSON.stringify({ userId: userId })
+                });
+                loadAdmins();
+            } catch (err) {
+                showNotice(adminsNotice, err.message);
+            }
+        });
+
+        async function removeAdmin(userId) {
+            try {
+                await apiJson("/api/v1/admin/apps/" + appId + "/admins/" + userId + "/remove", { method: "POST" });
+                loadAdmins();
+            } catch (err) {
+                showNotice(document.getElementById("admins-notice"), err.message);
+            }
+        }
+
+        (async function init() {
+            try {
+                await Promise.all([loadOverview(), loadKeys(), loadTemplates(), loadDocuments(), loadAdmins()]);
+            } catch (err) {
+                showNotice(notice, err.message);
+            }
+        })();
+    </script>
+</body>
+</html>

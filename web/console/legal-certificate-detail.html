@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Certificate Detail — TSI Sign Admin Console</title>
+    <link rel="stylesheet" href="assets/console.css">
+</head>
+<body>
+    <header class="topbar">
+        <div class="brand">TSI Sign</div>
+        <nav>
+            <a href="apps.html">Apps</a>
+            <a href="legal-evidence.html" class="active">Legal Evidence</a>
+            <a href="platform-users.html" class="platform-admin-only">Platform Users</a>
+            <span id="topbar-user" class="muted" style="margin-right:16px;"></span>
+            <a href="#" onclick="logout(); return false;">Log out</a>
+        </nav>
+    </header>
+
+    <main>
+        <p class="subtitle"><a href="legal-evidence.html">&larr; Legal Evidence</a></p>
+        <h1 id="cert-title">Loading…</h1>
+
+        <div id="notice" class="notice error" style="display:none;"></div>
+
+        <div class="panel" id="summary-panel">Loading…</div>
+
+        <div class="row">
+            <div>
+                <h2>Part A — System &amp; Operating Status</h2>
+                <div class="panel"><pre id="part-a" style="white-space:pre-wrap; font-size:12px; margin:0;"></pre></div>
+            </div>
+            <div>
+                <h2>Part B — Last-Edit Tracking &amp; Output Particulars</h2>
+                <div class="panel"><pre id="part-b" style="white-space:pre-wrap; font-size:12px; margin:0;"></pre></div>
+            </div>
+        </div>
+    </main>
+
+    <script src="assets/console.js"></script>
+    <script>
+        const certificateId = qs("certificateId");
+        const notice = document.getElementById("notice");
+        loadTopbar();
+
+        async function load() {
+            const cert = await apiJson("/api/v1/admin/legal-certificates/" + certificateId);
+            document.getElementById("cert-title").textContent = "Legal Certificate v" + cert.version + " — " + (cert.documentTitle || "");
+
+            document.getElementById("summary-panel").innerHTML = `
+                <table>
+                    <tr><th>Certificate ID</th><td>${escapeHtml(cert.certificateId)}</td></tr>
+                    <tr><th>Version</th><td>${cert.version}</td></tr>
+                    <tr><th>Certificate Hash (SHA-256)</th><td style="font-family:ui-monospace,monospace; font-size:12px;">${escapeHtml(cert.certificateHash)}</td></tr>
+                    <tr><th>Linked Document</th><td><a href="document-detail.html?appId=${encodeURIComponent(cert.appId)}&documentId=${encodeURIComponent(cert.documentId)}">${escapeHtml(cert.documentTitle) || "—"}</a> (${escapeHtml(cert.documentStatus) || "—"})</td></tr>
+                    <tr><th>Document Original Hash</th><td style="font-family:ui-monospace,monospace; font-size:12px;">${escapeHtml(cert.documentOriginalHash) || "—"}</td></tr>
+                    <tr><th>Document Sealed Hash</th><td style="font-family:ui-monospace,monospace; font-size:12px;">${escapeHtml(cert.documentSealedHash) || "—"}</td></tr>
+                </table>
+                <div style="margin-top:16px;">
+                    <a class="btn" href="/api/v1/admin/legal-certificates/${encodeURIComponent(certificateId)}/download" target="_blank">Download Certificate PDF</a>
+                </div>`;
+
+            document.getElementById("part-a").textContent = JSON.stringify(cert.partA, null, 2);
+            document.getElementById("part-b").textContent = JSON.stringify(cert.partB, null, 2);
+        }
+
+        load().catch(err => showNotice(notice, err.message));
+    </script>
+</body>
+</html>
