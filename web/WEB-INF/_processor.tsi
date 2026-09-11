@@ -1,0 +1,18 @@
+# TSI Sign — Service definitions: "class|AUTH_MODE"
+# PUBLIC: no auth check here (Setup/Auth's setup/login do their own internal
+#   checks — e.g. Setup.setup 409s once a platform_user exists).
+# TENANT: requires a valid X-API-Key (App-facing engine API, §6).
+# CONSOLE: requires a valid platform_user session (admin console, §10).
+# TENANT_OR_CONSOLE: either; the Action branches internally (matches
+#   tsi-ledger's Accounts.java) — used where an App and the admin console
+#   both operate on the same resource (Templates, Documents).
+/api/v1/ping=org.tsicoop.sign.service.v1.Ping|TENANT
+/api/v1/templates=org.tsicoop.sign.service.v1.Templates|TENANT_OR_CONSOLE
+/api/v1/documents=org.tsicoop.sign.service.v1.Documents|TENANT_OR_CONSOLE
+
+/api/v1/admin/setup=org.tsicoop.sign.service.v1.Setup|PUBLIC
+/api/v1/admin/auth=org.tsicoop.sign.service.v1.Auth|PUBLIC
+/api/v1/admin/apps=org.tsicoop.sign.service.v1.Apps|CONSOLE
+/api/v1/admin/keys=org.tsicoop.sign.service.v1.Keys|CONSOLE
+/api/v1/admin/legal-certificates=org.tsicoop.sign.service.v1.LegalCertificates|CONSOLE
+/api/v1/admin/platform-users=org.tsicoop.sign.service.v1.PlatformUsers|CONSOLE

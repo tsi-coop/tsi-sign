@@ -37,7 +37,7 @@
         const notice = document.getElementById("notice");
 
         async function load() {
-            const entries = await apiJson("/api/v1/admin/legal-certificates");
+            const entries = await tsiCall("/api/v1/admin/legal-certificates", "list_registry", {});
             const body = document.getElementById("registry-body");
             body.innerHTML = entries.length === 0
                 ? '<tr><td colspan="5" class="muted">No legal certificates issued yet.</td></tr>'

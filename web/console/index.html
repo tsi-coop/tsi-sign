@@ -5,14 +5,15 @@
     <title>TSI Sign Admin Console</title>
 </head>
 <body></body>
+<script src="assets/console.js"></script>
 <script>
     // Check auth state before redirecting, instead of always bouncing to
-    // apps.html first — that would fire an unauthenticated fetch (401) on
+    // apps.html first — that would fire an unauthenticated call (401) on
     // every fresh visit before landing on login.html.
     (async function () {
         try {
-            const res = await fetch("/api/v1/admin/auth/me");
-            window.location.replace(res.ok ? "apps.html" : "login.html");
+            await tsiCall("/api/v1/admin/auth", "me", {}, true);
+            window.location.replace("apps.html");
         } catch (e) {
             window.location.replace("login.html");
         }

@@ -78,7 +78,7 @@
         let appsCache = [];
 
         async function loadUsers() {
-            usersCache = await apiJson("/api/v1/admin/platform-users");
+            usersCache = await tsiCall("/api/v1/admin/platform-users", "list_users", {});
             const body = document.getElementById("users-body");
             body.innerHTML = usersCache.map(u => `
                 <tr>
@@ -93,7 +93,7 @@
 
         async function deactivate(userId) {
             try {
-                await apiJson("/api/v1/admin/platform-users/" + userId + "/deactivate", { method: "POST" });
+                await tsiCall("/api/v1/admin/platform-users", "deactivate_user", { userId });
                 loadUsers();
             } catch (err) {
                 showNotice(notice, err.message);
@@ -102,7 +102,7 @@
 
         async function activate(userId) {
             try {
-                await apiJson("/api/v1/admin/platform-users/" + userId + "/activate", { method: "POST" });
+                await tsiCall("/api/v1/admin/platform-users", "activate_user", { userId });
                 loadUsers();
             } catch (err) {
                 showNotice(notice, err.message);
@@ -112,14 +112,11 @@
         document.getElementById("create-form").addEventListener("submit", async (e) => {
             e.preventDefault();
             try {
-                await apiJson("/api/v1/admin/platform-users", {
-                    method: "POST",
-                    body: JSON.stringify({
-                        fullName: document.getElementById("user-name").value,
-                        email: document.getElementById("user-email").value,
-                        password: document.getElementById("user-password").value,
-                        role: document.getElementById("user-role").value
-                    })
+                await tsiCall("/api/v1/admin/platform-users", "create_user", {
+                    fullName: document.getElementById("user-name").value,
+                    email: document.getElementById("user-email").value,
+                    password: document.getElementById("user-password").value,
+                    role: document.getElementById("user-role").value
                 });
                 document.getElementById("create-form").reset();
                 loadUsers();
@@ -132,9 +129,9 @@
             const user = usersCache.find(u => u.userId === userId);
             document.getElementById("scope-user-name").textContent = user.fullName;
             if (appsCache.length === 0) {
-                appsCache = await apiJson("/api/v1/admin/apps");
+                appsCache = await tsiCall("/api/v1/admin/apps", "list_apps", {});
             }
-            const assigned = new Set(await apiJson("/api/v1/admin/platform-users/" + userId + "/apps"));
+            const assigned = new Set(await tsiCall("/api/v1/admin/platform-users", "list_user_apps", { userId }));
 
             const container = document.getElementById("scope-checkboxes");
             container.innerHTML = appsCache.map(a => `
@@ -146,9 +143,8 @@
             container.querySelectorAll("input[type=checkbox]").forEach(cb => {
                 cb.addEventListener("change", async () => {
                     try {
-                        await apiJson("/api/v1/admin/platform-users/" + userId + "/apps", {
-                            method: "POST",
-                            body: JSON.stringify({ appId: cb.dataset.appId, assign: cb.checked })
+                        await tsiCall("/api/v1/admin/platform-users", "update_user_app_assignment", {
+                            userId, appId: cb.dataset.appId, assign: cb.checked
                         });
                     } catch (err) {
                         showNotice(notice, err.message);
