@@ -7,11 +7,16 @@ import java.sql.Connection;
 import java.sql.SQLException;
 
 /**
- * Thread-safe singleton HikariCP connection pool. TSI_SIGN_ENV=local relaxes
- * sslmode to "prefer" for the docker-compose evaluation setup, where Postgres
- * has no TLS cert configured; any other environment requires "require".
+ * Thread-safe, singleton HikariCP connection pool (TSI framework standard
+ * pattern). TSI_SIGN_ENV=local relaxes sslmode to "prefer" for the
+ * docker-compose evaluation setup, where Postgres has no TLS cert
+ * configured; any other environment requires "require".
+ *
+ * Usage: `new PoolDB()` opens a connection held on `this.con`; callers close
+ * it (and any ResultSet/PreparedStatement) via DB.cleanup() in a finally
+ * block — see any repository method for the exact idiom.
  */
-public class PoolDB {
+public class PoolDB extends DB {
 
     private static volatile HikariDataSource dataSource = null;
 
@@ -50,10 +55,28 @@ public class PoolDB {
         }
     }
 
-    public static Connection getConnection() throws SQLException {
+    public PoolDB() throws SQLException {
+        super();
+        this.con = createConnection(true);
+    }
+
+    public PoolDB(boolean autocommit) throws SQLException {
+        super();
+        this.con = createConnection(autocommit);
+    }
+
+    public Connection getConnection() {
+        return con;
+    }
+
+    private Connection createConnection(boolean autocommit) throws SQLException {
         if (dataSource == null) {
             initDataSource();
         }
-        return dataSource.getConnection();
+        Connection connection = dataSource.getConnection();
+        if (connection.getAutoCommit() != autocommit) {
+            connection.setAutoCommit(autocommit);
+        }
+        return connection;
     }
 }

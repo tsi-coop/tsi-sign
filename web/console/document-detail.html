@@ -56,7 +56,7 @@
         let currentDoc = null;
 
         async function load() {
-            currentDoc = await apiJson("/api/v1/admin/apps/" + appId + "/documents/" + documentId);
+            currentDoc = await tsiCall("/api/v1/documents", "get_document", { appId, documentId });
             document.getElementById("doc-title").textContent = currentDoc.title;
 
             document.getElementById("overview-panel").innerHTML = `
@@ -67,10 +67,12 @@
                     <tr><th>Sealed Hash (SHA-256)</th><td style="font-family:ui-monospace,monospace; font-size:12px;">${escapeHtml(currentDoc.sealedHash) || '<span class="muted">—</span>'}</td></tr>
                 </table>
                 <div style="margin-top:16px;">
-                    <a class="btn" href="/api/v1/admin/apps/${encodeURIComponent(appId)}/documents/${encodeURIComponent(documentId)}/download" target="_blank">
-                        Download ${currentDoc.hasSealed ? "Signed" : "Original"} PDF
-                    </a>
+                    <button id="download-document-btn">Download ${currentDoc.hasSealed ? "Signed" : "Original"} PDF</button>
                 </div>`;
+            document.getElementById("download-document-btn").addEventListener("click", () => {
+                tsiOpenBlob("/api/v1/documents", "download_document", { appId, documentId })
+                    .catch(err => showNotice(notice, err.message));
+            });
 
             const sealsBody = document.getElementById("seals-body");
             sealsBody.innerHTML = currentDoc.seals.length === 0
@@ -123,10 +125,7 @@
 
         async function generateCertificate() {
             try {
-                await apiJson("/api/v1/admin/apps/" + appId + "/documents/" + documentId + "/legal-certificate", {
-                    method: "POST",
-                    body: JSON.stringify({})
-                });
+                await tsiCall("/api/v1/documents", "generate_legal_certificate", { appId, documentId });
                 await load();
             } catch (err) {
                 const legalNotice = document.getElementById("legal-notice");

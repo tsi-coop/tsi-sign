@@ -168,7 +168,7 @@
         });
 
         async function loadOverview() {
-            const app = await apiJson("/api/v1/admin/apps/" + appId);
+            const app = await tsiCall("/api/v1/admin/apps", "get_app", { appId });
             document.getElementById("app-title").textContent = app.appName;
             document.getElementById("app-slug").textContent = app.appSlug;
             document.getElementById("overview-panel").innerHTML = `
@@ -192,9 +192,8 @@
             const rateLimitNotice = document.getElementById("rate-limit-notice");
             const raw = document.getElementById("rate-limit-rpm").value.trim();
             try {
-                await apiJson("/api/v1/admin/apps/" + appId + "/rate-limit", {
-                    method: "POST",
-                    body: JSON.stringify({ rateLimitRpm: raw === "" ? null : parseInt(raw, 10) })
+                await tsiCall("/api/v1/admin/apps", "update_rate_limit", {
+                    appId, rateLimitRpm: raw === "" ? null : parseInt(raw, 10)
                 });
                 showNotice(rateLimitNotice, "Saved.", "success");
             } catch (err) {
@@ -203,7 +202,7 @@
         });
 
         async function loadKeys() {
-            const keys = await apiJson("/api/v1/admin/apps/" + appId + "/keys");
+            const keys = await tsiCall("/api/v1/admin/keys", "list_keys", { appId });
             const body = document.getElementById("keys-body");
             body.innerHTML = keys.length === 0
                 ? '<tr><td colspan="5" class="muted">No keys yet.</td></tr>'
@@ -220,7 +219,7 @@
         async function revokeKey(keyId) {
             if (!confirm("Revoke this key? This cannot be undone.")) return;
             try {
-                await apiJson("/api/v1/admin/apps/" + appId + "/keys/" + keyId + "/revoke", { method: "POST" });
+                await tsiCall("/api/v1/admin/keys", "revoke_key", { appId, keyId });
                 loadKeys();
             } catch (err) {
                 showNotice(notice, err.message);
@@ -229,7 +228,7 @@
 
         document.getElementById("issue-key-btn").addEventListener("click", async () => {
             try {
-                const result = await apiJson("/api/v1/admin/apps/" + appId + "/keys", { method: "POST" });
+                const result = await tsiCall("/api/v1/admin/keys", "issue_key", { appId });
                 const keyNotice = document.getElementById("new-key-notice");
                 keyNotice.style.display = "block";
                 keyNotice.textContent = "New API key (shown once): " + result.apiKey;
@@ -243,13 +242,11 @@
             e.preventDefault();
             const signingNotice = document.getElementById("signing-notice");
             try {
-                await apiJson("/api/v1/admin/apps/" + appId + "/signing-defaults", {
-                    method: "POST",
-                    body: JSON.stringify({
-                        defaultProviderId: document.getElementById("signing-provider").value || null,
-                        defaultKeyAlias: document.getElementById("signing-key-alias").value || null,
-                        webhookUrl: document.getElementById("signing-webhook").value || null
-                    })
+                await tsiCall("/api/v1/admin/apps", "update_signing_defaults", {
+                    appId,
+                    defaultProviderId: document.getElementById("signing-provider").value || null,
+                    defaultKeyAlias: document.getElementById("signing-key-alias").value || null,
+                    webhookUrl: document.getElementById("signing-webhook").value || null
                 });
                 showNotice(signingNotice, "Saved.", "success");
                 loadOverview();
@@ -261,7 +258,7 @@
         let templatesCache = [];
 
         async function loadTemplates() {
-            templatesCache = await apiJson("/api/v1/admin/apps/" + appId + "/templates");
+            templatesCache = await tsiCall("/api/v1/templates", "list_templates", { appId });
             const body = document.getElementById("templates-body");
             body.innerHTML = templatesCache.length === 0
                 ? '<tr><td colspan="4" class="muted">No templates yet.</td></tr>'
@@ -277,13 +274,11 @@
         document.getElementById("template-form").addEventListener("submit", async (e) => {
             e.preventDefault();
             try {
-                await apiJson("/api/v1/admin/apps/" + appId + "/templates", {
-                    method: "POST",
-                    body: JSON.stringify({
-                        templateName: document.getElementById("template-name").value,
-                        category: document.getElementById("template-category").value || null,
-                        htmlContent: document.getElementById("template-html").value
-                    })
+                await tsiCall("/api/v1/templates", "create_template", {
+                    appId,
+                    templateName: document.getElementById("template-name").value,
+                    category: document.getElementById("template-category").value || null,
+                    htmlContent: document.getElementById("template-html").value
                 });
                 document.getElementById("template-form").reset();
                 loadTemplates();
@@ -317,23 +312,16 @@
                 return;
             }
             try {
-                const res = await apiFetch(
-                    "/api/v1/admin/apps/" + appId + "/templates/" + previewTemplateId + "/preview",
-                    { method: "POST", body: JSON.stringify({ payloadData: payloadData }) }
-                );
-                if (!res.ok) {
-                    const body = await res.json().catch(() => ({}));
-                    throw new Error(body.message || res.statusText);
-                }
-                const blob = await res.blob();
-                window.open(URL.createObjectURL(blob), "_blank");
+                await tsiOpenBlob("/api/v1/templates", "preview_template", {
+                    appId, templateId: previewTemplateId, payloadData
+                });
             } catch (err) {
                 showNotice(previewNotice, err.message);
             }
         });
 
         async function loadDocuments() {
-            const documents = await apiJson("/api/v1/admin/apps/" + appId + "/documents");
+            const documents = await tsiCall("/api/v1/documents", "list_documents", { appId });
             const body = document.getElementById("documents-body");
             body.innerHTML = documents.length === 0
                 ? '<tr><td colspan="4" class="muted">No documents yet — generate one from a template via the API, or use "Generate Test Document" above (test documents are not saved).</td></tr>'
@@ -348,8 +336,8 @@
 
         async function loadAdmins() {
             const [admins, allUsers] = await Promise.all([
-                apiJson("/api/v1/admin/apps/" + appId + "/admins"),
-                apiJson("/api/v1/admin/platform-users").catch(() => [])
+                tsiCall("/api/v1/admin/apps", "list_admins", { appId }),
+                tsiCall("/api/v1/admin/platform-users", "list_users", {}).catch(() => [])
             ]);
 
             const body = document.getElementById("admins-body");
@@ -378,10 +366,7 @@
                 return;
             }
             try {
-                await apiJson("/api/v1/admin/apps/" + appId + "/admins", {
-                    method: "POST",
-                    body: JSON.stringify({ userId: userId })
-                });
+                await tsiCall("/api/v1/admin/apps", "add_admin", { appId, userId });
                 loadAdmins();
             } catch (err) {
                 showNotice(adminsNotice, err.message);
@@ -390,7 +375,7 @@
 
         async function removeAdmin(userId) {
             try {
-                await apiJson("/api/v1/admin/apps/" + appId + "/admins/" + userId + "/remove", { method: "POST" });
+                await tsiCall("/api/v1/admin/apps", "remove_admin", { appId, userId });
                 loadAdmins();
             } catch (err) {
                 showNotice(document.getElementById("admins-notice"), err.message);

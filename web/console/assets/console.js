@@ -1,17 +1,19 @@
-// Shared admin console helpers (Chunk 7). Plain fetch + DOM, no build step —
-// matches the rest of TSI Sign's zero-external-dependency, self-hosted ethos.
+// Shared admin console helpers. TSI framework standard pattern (matches
+// tsi-ledger/tsi-dpdp-cms/tsi-privacy-vault): every call is POST to a fixed
+// resource path with "_func" + params in the JSON body — no REST verbs, no
+// {id} path segments. No build step, plain fetch + DOM.
 
-async function apiFetch(path, options) {
+async function apiFetch(path, options, skipAuthRedirect) {
     const res = await fetch(path, Object.assign({ headers: { "Content-Type": "application/json" } }, options));
-    if (res.status === 401 && !path.includes("/auth/")) {
+    if (res.status === 401 && !skipAuthRedirect) {
         window.location.href = "login.html";
         throw new Error("Not logged in");
     }
     return res;
 }
 
-async function apiJson(path, options) {
-    const res = await apiFetch(path, options);
+async function apiJson(path, options, skipAuthRedirect) {
+    const res = await apiFetch(path, options, skipAuthRedirect);
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
         const err = new Error(body.message || res.statusText);
@@ -20,6 +22,33 @@ async function apiJson(path, options) {
         throw err;
     }
     return body;
+}
+
+/** POST resourcePath with {_func, ...params} and parse the JSON response. */
+async function tsiCall(resourcePath, func, params, skipAuthRedirect) {
+    return apiJson(resourcePath, {
+        method: "POST",
+        body: JSON.stringify(Object.assign({ _func: func }, params || {}))
+    }, skipAuthRedirect);
+}
+
+/** Same as tsiCall, but for funcs that return a binary (PDF) body. */
+async function tsiCallBlob(resourcePath, func, params) {
+    const res = await apiFetch(resourcePath, {
+        method: "POST",
+        body: JSON.stringify(Object.assign({ _func: func }, params || {}))
+    });
+    if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || res.statusText);
+    }
+    return res.blob();
+}
+
+/** Opens a blob-returning func's result in a new tab (preview/download). */
+async function tsiOpenBlob(resourcePath, func, params) {
+    const blob = await tsiCallBlob(resourcePath, func, params);
+    window.open(URL.createObjectURL(blob), "_blank");
 }
 
 function escapeHtml(value) {
@@ -45,7 +74,7 @@ async function loadTopbar() {
     const el = document.getElementById("topbar-user");
     if (!el) return;
     try {
-        const me = await apiJson("/api/v1/admin/auth/me");
+        const me = await tsiCall("/api/v1/admin/auth", "me", {}, true);
         el.textContent = me.fullName + " (" + me.role + ")";
         // Platform-admin-only nav items (Platform Users & Roles, §10.9) —
         // the backend still enforces this; hiding the link just avoids
@@ -54,11 +83,11 @@ async function loadTopbar() {
             node.style.display = me.role === "PLATFORM_ADMIN" ? "" : "none";
         });
     } catch (e) {
-        // ApiFetch already redirects to login on 401.
+        window.location.href = "login.html";
     }
 }
 
 async function logout() {
-    await apiFetch("/api/v1/admin/auth/logout", { method: "POST" });
+    await tsiCall("/api/v1/admin/auth", "logout", {}, true);
     window.location.href = "login.html";
 }

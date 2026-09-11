@@ -44,7 +44,7 @@
         loadTopbar();
 
         async function load() {
-            const cert = await apiJson("/api/v1/admin/legal-certificates/" + certificateId);
+            const cert = await tsiCall("/api/v1/admin/legal-certificates", "get_certificate", { certificateId });
             document.getElementById("cert-title").textContent = "Legal Certificate v" + cert.version + " — " + (cert.documentTitle || "");
 
             document.getElementById("summary-panel").innerHTML = `
@@ -57,8 +57,12 @@
                     <tr><th>Document Sealed Hash</th><td style="font-family:ui-monospace,monospace; font-size:12px;">${escapeHtml(cert.documentSealedHash) || "—"}</td></tr>
                 </table>
                 <div style="margin-top:16px;">
-                    <a class="btn" href="/api/v1/admin/legal-certificates/${encodeURIComponent(certificateId)}/download" target="_blank">Download Certificate PDF</a>
+                    <button id="download-cert-btn">Download Certificate PDF</button>
                 </div>`;
+            document.getElementById("download-cert-btn").addEventListener("click", () => {
+                tsiOpenBlob("/api/v1/admin/legal-certificates", "download_certificate", { certificateId })
+                    .catch(err => showNotice(notice, err.message));
+            });
 
             document.getElementById("part-a").textContent = JSON.stringify(cert.partA, null, 2);
             document.getElementById("part-b").textContent = JSON.stringify(cert.partB, null, 2);
