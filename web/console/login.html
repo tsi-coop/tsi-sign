@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>TSI Sign Admin Console</title>
+    <link rel="stylesheet" href="assets/console.css">
+</head>
+<body>
+    <main style="max-width: 400px; margin-top: 80px;">
+        <h1>TSI Sign</h1>
+        <p class="subtitle" id="subtitle">Admin Console</p>
+
+        <div class="panel">
+            <div id="notice" class="notice error" style="display:none;"></div>
+
+            <form id="setup-form" style="display:none;">
+                <p class="muted">No platform admin exists yet. Create the first one.</p>
+                <label>Full name</label>
+                <input type="text" id="setup-name" required>
+                <label>Email</label>
+                <input type="email" id="setup-email" required>
+                <label>Password (min. 8 characters)</label>
+                <input type="password" id="setup-password" minlength="8" required>
+                <div style="margin-top:16px;"><button type="submit">Create admin account</button></div>
+            </form>
+
+            <form id="login-form" style="display:none;">
+                <label>Email</label>
+                <input type="email" id="login-email" required>
+                <label>Password</label>
+                <input type="password" id="login-password" required>
+                <div style="margin-top:16px;"><button type="submit">Log in</button></div>
+            </form>
+        </div>
+    </main>
+
+    <script src="assets/console.js"></script>
+    <script>
+        const notice = document.getElementById("notice");
+
+        (async function init() {
+            const status = await fetch("/api/v1/admin/setup-status").then(r => r.json());
+            document.getElementById(status.initialized ? "login-form" : "setup-form").style.display = "block";
+        })();
+
+        document.getElementById("setup-form").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            try {
+                await apiJson("/api/v1/admin/setup", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        fullName: document.getElementById("setup-name").value,
+                        email: document.getElementById("setup-email").value,
+                        password: document.getElementById("setup-password").value
+                    })
+                });
+                await apiJson("/api/v1/admin/auth/login", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        email: document.getElementById("setup-email").value,
+                        password: document.getElementById("setup-password").value
+                    })
+                });
+                window.location.href = "apps.html";
+            } catch (err) {
+                showNotice(notice, err.message);
+            }
+        });
+
+        document.getElementById("login-form").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            try {
+                await apiJson("/api/v1/admin/auth/login", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        email: document.getElementById("login-email").value,
+                        password: document.getElementById("login-password").value
+                    })
+                });
+                window.location.href = "apps.html";
+            } catch (err) {
+                showNotice(notice, err.message);
+            }
+        });
+    </script>
+</body>
+</html>

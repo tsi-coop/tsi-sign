@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Document Detail — TSI Sign Admin Console</title>
+    <link rel="stylesheet" href="assets/console.css">
+</head>
+<body>
+    <header class="topbar">
+        <div class="brand">TSI Sign</div>
+        <nav>
+            <a href="apps.html">Apps</a>
+            <a href="legal-evidence.html">Legal Evidence</a>
+            <a href="platform-users.html" class="platform-admin-only">Platform Users</a>
+            <span id="topbar-user" class="muted" style="margin-right:16px;"></span>
+            <a href="#" onclick="logout(); return false;">Log out</a>
+        </nav>
+    </header>
+
+    <main>
+        <p class="subtitle"><a id="back-link" href="apps.html">&larr; App</a></p>
+        <h1 id="doc-title">Loading…</h1>
+
+        <div id="notice" class="notice error" style="display:none;"></div>
+
+        <div class="panel" id="overview-panel">Loading…</div>
+
+        <h2>Seals</h2>
+        <div class="panel">
+            <table>
+                <thead><tr><th>Provider</th><th>Key Alias</th><th>Standard</th><th>Sealed At</th></tr></thead>
+                <tbody id="seals-body"><tr><td colspan="4" class="muted">Loading…</td></tr></tbody>
+            </table>
+        </div>
+
+        <h2>Audit Timeline</h2>
+        <div class="panel">
+            <table>
+                <thead><tr><th>Event</th><th>Actor</th><th>IP</th><th>When</th></tr></thead>
+                <tbody id="timeline-body"><tr><td colspan="4" class="muted">Loading…</td></tr></tbody>
+            </table>
+        </div>
+
+        <h2>Legal Evidence (BSA &sect;63)</h2>
+        <div class="panel" id="legal-panel">Loading…</div>
+    </main>
+
+    <script src="assets/console.js"></script>
+    <script>
+        const appId = qs("appId");
+        const documentId = qs("documentId");
+        const notice = document.getElementById("notice");
+        document.getElementById("back-link").href = "app-detail.html?appId=" + encodeURIComponent(appId);
+        loadTopbar();
+
+        let currentDoc = null;
+
+        async function load() {
+            currentDoc = await apiJson("/api/v1/admin/apps/" + appId + "/documents/" + documentId);
+            document.getElementById("doc-title").textContent = currentDoc.title;
+
+            document.getElementById("overview-panel").innerHTML = `
+                <table>
+                    <tr><th>Document ID</th><td>${escapeHtml(currentDoc.documentId)}</td></tr>
+                    <tr><th>Status</th><td><span class="badge ${currentDoc.status === "SIGNED" ? "active" : "inactive"}">${escapeHtml(currentDoc.status)}</span></td></tr>
+                    <tr><th>Original Hash (SHA-256)</th><td style="font-family:ui-monospace,monospace; font-size:12px;">${escapeHtml(currentDoc.originalHash)}</td></tr>
+                    <tr><th>Sealed Hash (SHA-256)</th><td style="font-family:ui-monospace,monospace; font-size:12px;">${escapeHtml(currentDoc.sealedHash) || '<span class="muted">—</span>'}</td></tr>
+                </table>
+                <div style="margin-top:16px;">
+                    <a class="btn" href="/api/v1/admin/apps/${encodeURIComponent(appId)}/documents/${encodeURIComponent(documentId)}/download" target="_blank">
+                        Download ${currentDoc.hasSealed ? "Signed" : "Original"} PDF
+                    </a>
+                </div>`;
+
+            const sealsBody = document.getElementById("seals-body");
+            sealsBody.innerHTML = currentDoc.seals.length === 0
+                ? '<tr><td colspan="4" class="muted">Not sealed yet.</td></tr>'
+                : currentDoc.seals.map(s => `
+                    <tr>
+                        <td>${escapeHtml(s.providerId)}</td>
+                        <td>${escapeHtml(s.keyAlias) || "—"}</td>
+                        <td>${escapeHtml(s.signatureStandard) || "—"}</td>
+                        <td class="muted">${escapeHtml(s.sealedAt)}</td>
+                    </tr>`).join("");
+
+            const timelineBody = document.getElementById("timeline-body");
+            timelineBody.innerHTML = currentDoc.auditTimeline.length === 0
+                ? '<tr><td colspan="4" class="muted">No audit events.</td></tr>'
+                : currentDoc.auditTimeline.map(a => `
+                    <tr>
+                        <td>${escapeHtml(a.eventType)}</td>
+                        <td>${escapeHtml(a.actorType)}</td>
+                        <td class="muted">${escapeHtml(a.ipAddress) || "—"}</td>
+                        <td class="muted">${escapeHtml(a.createdAt)}</td>
+                    </tr>`).join("");
+
+            renderLegalPanel();
+        }
+
+        function renderLegalPanel() {
+            const panel = document.getElementById("legal-panel");
+            if (currentDoc.latestLegalCertificate) {
+                const cert = currentDoc.latestLegalCertificate;
+                panel.innerHTML = `
+                    <p>A legal certificate has been sealed for this document (version ${cert.version}).</p>
+                    <a class="btn" href="legal-certificate-detail.html?certificateId=${encodeURIComponent(cert.certificateId)}">View Certificate</a>
+                    ${currentDoc.status === "SIGNED" ? '<button class="secondary" id="regenerate-cert-btn" style="margin-left:8px;">Generate New Version</button>' : ""}
+                `;
+                if (currentDoc.status === "SIGNED") {
+                    document.getElementById("regenerate-cert-btn").addEventListener("click", generateCertificate);
+                }
+            } else if (currentDoc.status === "SIGNED") {
+                panel.innerHTML = `
+                    <p class="muted">No legal certificate has been generated for this document yet.</p>
+                    <button id="generate-cert-btn">Generate Legal Certificate</button>
+                    <div id="legal-notice" class="notice error" style="display:none; margin-top:12px;"></div>
+                `;
+                document.getElementById("generate-cert-btn").addEventListener("click", generateCertificate);
+            } else {
+                panel.innerHTML = '<p class="muted">Document must be sealed before a legal certificate can be generated.</p>';
+            }
+        }
+
+        async function generateCertificate() {
+            try {
+                await apiJson("/api/v1/admin/apps/" + appId + "/documents/" + documentId + "/legal-certificate", {
+                    method: "POST",
+                    body: JSON.stringify({})
+                });
+                await load();
+            } catch (err) {
+                const legalNotice = document.getElementById("legal-notice");
+                if (legalNotice) showNotice(legalNotice, err.message);
+                else showNotice(notice, err.message);
+            }
+        }
+
+        load().catch(err => showNotice(notice, err.message));
+    </script>
+</body>
+</html>

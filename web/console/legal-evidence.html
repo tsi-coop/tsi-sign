@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Legal Evidence — TSI Sign Admin Console</title>
+    <link rel="stylesheet" href="assets/console.css">
+</head>
+<body>
+    <header class="topbar">
+        <div class="brand">TSI Sign</div>
+        <nav>
+            <a href="apps.html">Apps</a>
+            <a href="legal-evidence.html" class="active">Legal Evidence</a>
+            <a href="platform-users.html" class="platform-admin-only">Platform Users</a>
+            <span id="topbar-user" class="muted" style="margin-right:16px;"></span>
+            <a href="#" onclick="logout(); return false;">Log out</a>
+        </nav>
+    </header>
+
+    <main>
+        <h1>Legal Evidence</h1>
+        <p class="subtitle">Every BSA &sect;63 Part A/B certificate issued across all Apps.</p>
+
+        <div id="notice" class="notice error" style="display:none;"></div>
+
+        <div class="panel">
+            <table>
+                <thead><tr><th>Document</th><th>App</th><th>Version</th><th>Certificate Hash</th><th>Generated</th></tr></thead>
+                <tbody id="registry-body"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
+            </table>
+        </div>
+    </main>
+
+    <script src="assets/console.js"></script>
+    <script>
+        loadTopbar();
+        const notice = document.getElementById("notice");
+
+        async function load() {
+            const entries = await apiJson("/api/v1/admin/legal-certificates");
+            const body = document.getElementById("registry-body");
+            body.innerHTML = entries.length === 0
+                ? '<tr><td colspan="5" class="muted">No legal certificates issued yet.</td></tr>'
+                : entries.map(e => `
+                    <tr>
+                        <td><a href="legal-certificate-detail.html?certificateId=${encodeURIComponent(e.certificateId)}">${escapeHtml(e.documentTitle)}</a></td>
+                        <td>${escapeHtml(e.appName)}</td>
+                        <td>${e.version}</td>
+                        <td style="font-family:ui-monospace,monospace; font-size:12px;">${escapeHtml(e.certificateHash).slice(0, 16)}…</td>
+                        <td class="muted">${escapeHtml(e.createdAt)}</td>
+                    </tr>`).join("");
+        }
+
+        load().catch(err => showNotice(notice, err.message));
+    </script>
+</body>
+</html>
