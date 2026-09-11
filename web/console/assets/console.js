@@ -71,11 +71,18 @@ function showNotice(el, message, type) {
 }
 
 async function loadTopbar() {
-    const el = document.getElementById("topbar-user");
-    if (!el) return;
+    const nameEl = document.getElementById("sidebar-user-name");
+    const roleEl = document.getElementById("sidebar-user-role");
+    const avatarEl = document.getElementById("sidebar-user-avatar");
+    if (!nameEl) return;
     try {
         const me = await tsiCall("/api/v1/admin/auth", "me", {}, true);
-        el.textContent = me.fullName + " (" + me.role + ")";
+        nameEl.textContent = me.fullName;
+        if (roleEl) roleEl.textContent = me.role;
+        if (avatarEl) {
+            const initials = (me.fullName || "").trim().split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
+            avatarEl.textContent = initials || "U";
+        }
         // Platform-admin-only nav items (Platform Users & Roles, §10.9) —
         // the backend still enforces this; hiding the link just avoids
         // showing a page that would immediately 403.
