@@ -46,6 +46,7 @@ public class Documents implements Action {
     private final AppRepository appRepository = new AppRepository();
     private final DocumentRepository documentRepository = new DocumentRepository();
     private final AuditLogRepository auditLogRepository = new AuditLogRepository();
+    private final PlatformUserRepository platformUserRepository = new PlatformUserRepository();
     private final LegalCertificateRepository legalCertificateRepository = new LegalCertificateRepository();
     private final DocumentStorageProvider storageProvider = new LocalFilesystemStorageProvider();
     private final AuthorizationService authorizationService = new AuthorizationService();
@@ -173,8 +174,9 @@ public class Documents implements Action {
                 document.storageProviderId(), document.originalStorageKey(), document.originalHash());
         byte[] originalBytes = storageProvider.retrieve(originalRef);
 
+        String signerIdentity = resolveSignerIdentity(req, appContext, appSlug);
         LocalPkiSigningService.SealResult sealed = signingService.seal(
-                originalBytes, keyAlias, reason, location, document.documentId(), document.title());
+                originalBytes, keyAlias, reason, location, signerIdentity);
 
         StorageObjectRef sealedRef = storageProvider.store(appSlug, documentId, "sealed", sealed.sealedPdfBytes());
 
@@ -192,6 +194,21 @@ public class Documents implements Action {
         json.put("sealedAt", Instant.now().toString());
         json.put("sha256Checksum", sealed.sha256Hash());
         OutputProcessor.send(res, HttpServletResponse.SC_OK, json);
+    }
+
+    /**
+     * Who to show on the visible Corporate Seal stamp's "Signed by" line: the
+     * console user's email when a platform_user triggered the seal, or the
+     * App's slug when an App triggered it via its own API key (no individual
+     * human is involved in that case).
+     */
+    private String resolveSignerIdentity(HttpServletRequest req, AppContext appContext, String appSlug) {
+        if (appContext != null) {
+            return "App: " + appSlug;
+        }
+        return platformUserRepository.findById(InputProcessor.getUserId(req))
+                .map(PlatformUserRepository.PlatformUserRecord::email)
+                .orElse("App: " + appSlug);
     }
 
     /** Raw-file counterpart to Templates.generateDocument: no template, caller supplies the PDF bytes directly. */
