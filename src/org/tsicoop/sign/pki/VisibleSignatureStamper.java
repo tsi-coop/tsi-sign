@@ -46,11 +46,23 @@ public class VisibleSignatureStamper {
     private VisibleSignatureStamper() {
     }
 
-    /** Self-contained, scannable QR payload - the original (pre-seal) document hash, not a live verification URL. */
-    public static String buildQrPayload(String documentHash, String keyAlias, String sealedAtIso) {
+    /**
+     * Self-contained, scannable QR payload - labeled key:value lines, one per
+     * field, readable offline with no app or server round-trip (the same
+     * "self-contained, offline-verifiable" spirit as GST e-way bills' QR
+     * spec, which is one of Corporate Seal's own named use cases - just
+     * without that spec's GSTIN-specific fields, which don't apply here).
+     * Encodes the original (pre-seal) document hash, since the sealed
+     * file's own hash doesn't exist yet at the point the stamp is drawn.
+     */
+    public static String buildQrPayload(String documentTitle, String documentId, String documentHash,
+            String keyAlias, String reason, String sealedAtIso) {
         return "TSI Sign Corporate Seal\n" +
+                "Document: " + documentTitle + "\n" +
+                "Document ID: " + documentId + "\n" +
                 "Doc SHA-256: " + documentHash + "\n" +
-                "Key Alias: " + keyAlias + "\n" +
+                "Sealed By: " + keyAlias + "\n" +
+                "Reason: " + reason + "\n" +
                 "Sealed At: " + sealedAtIso;
     }
 

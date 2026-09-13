@@ -62,7 +62,8 @@ public class LocalPkiSigningService {
     public record SealResult(byte[] sealedPdfBytes, String sha256Hash) {
     }
 
-    public SealResult seal(byte[] originalPdfBytes, String keyAlias, String reason, String location) throws Exception {
+    public SealResult seal(byte[] originalPdfBytes, String keyAlias, String reason, String location,
+            String documentId, String documentTitle) throws Exception {
         KeyStore.PrivateKeyEntry keyEntry = keyStoreProvider.getPrivateKeyEntry(keyAlias);
         String originalHash = HashUtil.sha256Hex(originalPdfBytes);
 
@@ -89,7 +90,7 @@ public class LocalPkiSigningService {
 
             if (!placements.isEmpty()) {
                 stampCorporateSeal(document, signatureOptions, placements, keyAlias, effectiveReason,
-                        signDate, originalHash);
+                        signDate, originalHash, documentId, documentTitle);
             }
 
             document.addSignature(signature, signatureInterface, signatureOptions);
@@ -111,7 +112,8 @@ public class LocalPkiSigningService {
      */
     private void stampCorporateSeal(PDDocument document, SignatureOptions signatureOptions,
             Map<String, SignaturePlaceholderLocator.Placement> placements, String keyAlias,
-            String effectiveReason, Calendar signDate, String originalHash) throws Exception {
+            String effectiveReason, Calendar signDate, String originalHash,
+            String documentId, String documentTitle) throws Exception {
         SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss z");
         dateFormat.setTimeZone(signDate.getTimeZone());
 
@@ -119,7 +121,7 @@ public class LocalPkiSigningService {
         String reasonLine = "Reason: " + truncate(effectiveReason, 40);
         String dateLine = "Date: " + dateFormat.format(signDate.getTime());
         String qrPayload = VisibleSignatureStamper.buildQrPayload(
-                originalHash, keyAlias, signDate.toInstant().toString());
+                documentTitle, documentId, originalHash, keyAlias, effectiveReason, signDate.toInstant().toString());
 
         String primaryName = placements.keySet().iterator().next();
         for (Map.Entry<String, SignaturePlaceholderLocator.Placement> entry : placements.entrySet()) {

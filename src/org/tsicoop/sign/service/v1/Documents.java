@@ -173,7 +173,8 @@ public class Documents implements Action {
                 document.storageProviderId(), document.originalStorageKey(), document.originalHash());
         byte[] originalBytes = storageProvider.retrieve(originalRef);
 
-        LocalPkiSigningService.SealResult sealed = signingService.seal(originalBytes, keyAlias, reason, location);
+        LocalPkiSigningService.SealResult sealed = signingService.seal(
+                originalBytes, keyAlias, reason, location, document.documentId(), document.title());
 
         StorageObjectRef sealedRef = storageProvider.store(appSlug, documentId, "sealed", sealed.sealedPdfBytes());
 

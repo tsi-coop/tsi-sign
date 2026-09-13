@@ -103,11 +103,16 @@ and "QR" actually mean here:
    different boxes at different times) is a separate, bigger feature (new
    status, per-placeholder seal tracking) and is **not** part of this plan.
 2. There is no public document-verification endpoint in this system today.
-   The QR encodes a self-contained, scannable text payload (hash, key
-   alias, timestamp) - not a clickable verification URL. Adding a public
-   verification endpoint later is a deliberate, separate decision (it means
-   exposing some document integrity data without auth) and shouldn't be
-   smuggled in as a side effect of a UI stamp.
+   The QR encodes a self-contained, scannable, labeled text payload
+   (document title, document ID, original SHA-256 hash, key alias, reason,
+   timestamp - the same "offline-verifiable, human-readable" spirit as the
+   GST e-way bill QR spec, one of Corporate Seal's own named use cases,
+   just without that spec's GSTIN-specific fields) - not a clickable
+   verification URL. Adding a public verification endpoint later (so
+   scanning takes you to a live "yes, this matches" page) is a deliberate,
+   separate decision - it means exposing some document integrity data
+   without auth - and shouldn't be smuggled in as a side effect of a UI
+   stamp.
 
 ## Approach
 
