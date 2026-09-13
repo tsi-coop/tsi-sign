@@ -34,10 +34,10 @@ public class LegalCertificateService {
                 td, th { border: 1px solid #999; padding: 4px 8px; text-align: left; }
             </style></head>
             <body>
-                <h1>Legal Evidence Certificate &#8212; Bharatiya Sakshya Adhiniyam, 2023, Section 63(4)</h1>
+                <h1>Legal Evidence Certificate - Bharatiya Sakshya Adhiniyam, 2023, Section 63(4)</h1>
                 <p>Document: {{documentTitle}} ({{documentId}})</p>
 
-                <h2>Part A &#8212; System Identification &amp; Operating Status</h2>
+                <h2>Part A: System Identification &amp; Operating Status</h2>
                 <table>
                     <tr><th>Hostname</th><td>{{hostname}}</td></tr>
                     <tr><th>Container ID</th><td>{{containerId}}</td></tr>
@@ -47,7 +47,7 @@ public class LegalCertificateService {
                     <tr><th>Captured At</th><td>{{capturedAt}}</td></tr>
                 </table>
 
-                <h2>Part B &#8212; Last-Edit Tracking &amp; Output Particulars</h2>
+                <h2>Part B: Last-Edit Tracking &amp; Output Particulars</h2>
                 <table>
                     <tr><th>Template ID</th><td>{{templateId}}</td></tr>
                     <tr><th>Template Version</th><td>{{templateVersion}}</td></tr>
@@ -140,7 +140,8 @@ public class LegalCertificateService {
 
         DocumentGenerationResult rendered = generatorService.generatePdf(CERTIFICATE_HTML_TEMPLATE, renderContext);
         LocalPkiSigningService.SealResult sealed = signingService.seal(
-                rendered.pdfBytes(), certifyingKeyAlias, "BSA Section 63(4) Legal Evidence Certificate", null);
+                rendered.pdfBytes(), certifyingKeyAlias, "BSA Section 63(4) Legal Evidence Certificate", null,
+                document.documentId(), document.title());
 
         int version = certificateRepository.nextVersion(document.documentId());
         StorageObjectRef ref = storageProvider.store(
