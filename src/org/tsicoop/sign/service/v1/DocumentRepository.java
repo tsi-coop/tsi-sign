@@ -8,6 +8,7 @@ import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public class DocumentRepository {
 
@@ -169,6 +170,52 @@ public class DocumentRepository {
         } finally {
             pool.cleanup(rs, ps, con);
         }
+    }
+
+    /**
+     * Dashboard aggregate (§10.1): document count matching any of the given
+     * statuses, across every App the caller can see - null appIds means
+     * every App (PLATFORM_ADMIN/AUDITOR); a concrete set scopes to an
+     * APP_MANAGER's assigned Apps.
+     */
+    public int countForApps(Set<String> appIds, List<String> statuses) throws Exception {
+        if (appIds != null && appIds.isEmpty()) return 0;
+        Connection con = null;
+        PreparedStatement ps = null;
+        ResultSet rs = null;
+        PoolDB pool = new PoolDB();
+        try {
+            con = pool.getConnection();
+            StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM documents WHERE status IN (")
+                    .append(placeholders(statuses.size(), "?")).append(")");
+            if (appIds != null) {
+                sql.append(" AND app_id IN (").append(placeholders(appIds.size(), "?::uuid")).append(")");
+            }
+            ps = con.prepareStatement(sql.toString());
+            int i = 1;
+            for (String status : statuses) {
+                ps.setString(i++, status);
+            }
+            if (appIds != null) {
+                for (String appId : appIds) {
+                    ps.setString(i++, appId);
+                }
+            }
+            rs = ps.executeQuery();
+            rs.next();
+            return rs.getInt(1);
+        } finally {
+            pool.cleanup(rs, ps, con);
+        }
+    }
+
+    private static String placeholders(int count, String token) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < count; i++) {
+            if (i > 0) sb.append(",");
+            sb.append(token);
+        }
+        return sb.toString();
     }
 
     public List<SealSummary> listSealsForDocument(String documentId) throws Exception {

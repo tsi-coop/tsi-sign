@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Templates - TSI Sign Admin Console</title>
+    <link rel="stylesheet" href="assets/console.css">
+</head>
+<body>
+    <header class="mobilebar">
+        <a class="brand" href="dashboard.html"><span class="mark">TS</span><span>TSI Sign</span></a>
+    </header>
+    <div class="app">
+        <aside class="side">
+            <a class="brand" href="dashboard.html"><span class="mark">TS</span><span>TSI Sign</span></a>
+            <nav class="nav">
+                <a href="dashboard.html">Dashboard</a>
+                <a href="apps.html">Apps</a>
+                <a href="templates.html" class="active">Templates</a>
+                <a href="documents.html">Documents</a>
+                <a href="legal-evidence.html">Legal</a>
+                <a href="users.html" class="platform-admin-only">Users</a>
+            </nav>
+            <div class="side-foot">
+                <div class="side-user-row">
+                    <div id="sidebar-user-avatar" class="avatar">-</div>
+                    <div style="min-width:0; flex:1;">
+                        <div id="sidebar-user-name" class="side-user-name"></div>
+                        <div id="sidebar-user-role" class="side-user-role"></div>
+                    </div>
+                </div>
+                <a href="#" onclick="logout(); return false;" class="signout">Sign Out</a>
+            </div>
+        </aside>
+
+        <main class="main">
+        <div class="page-head">
+            <div>
+                <h1>Templates</h1>
+                <p class="subtitle">Document templates, scoped to one App at a time.</p>
+            </div>
+            <button id="new-template-btn">+ New Template</button>
+        </div>
+
+        <div id="notice" class="notice error" style="display:none;"></div>
+
+        <div class="panel">
+            <div class="row">
+                <div>
+                    <label>App</label>
+                    <select id="app-select"></select>
+                </div>
+            </div>
+        </div>
+
+        <div id="content" style="display:none;">
+            <div class="panel">
+                <table>
+                    <thead><tr><th>Name</th><th>Category</th><th>Version</th><th></th></tr></thead>
+                    <tbody id="templates-body"><tr><td colspan="4" class="muted">Loading...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="empty-state" class="panel" style="display:none;">
+            <p class="muted">No Apps yet. <a href="apps.html">Create one</a> first.</p>
+        </div>
+        </main>
+    </div>
+
+    <!-- New Template modal -->
+    <div class="modal-overlay" id="create-modal">
+        <div class="modal wide">
+            <h2>New Template</h2>
+            <form id="template-form">
+                <div class="row">
+                    <div class="field"><label>Template name</label><input type="text" id="template-name" required placeholder="Sanction Letter"></div>
+                    <div class="field"><label>Category (optional)</label><input type="text" id="template-category" placeholder="LOAN"></div>
+                </div>
+                <div class="field">
+                    <label>HTML content (use {{field}} placeholders)</label>
+                    <textarea id="template-html" required>&lt;!DOCTYPE html&gt;
+&lt;html&gt;&lt;body&gt;
+  &lt;h1&gt;Agreement for {{borrower_name}}&lt;/h1&gt;
+&lt;/body&gt;&lt;/html&gt;</textarea>
+                </div>
+                <div id="template-notice" class="notice error" style="display:none;"></div>
+                <div class="modal-actions">
+                    <button type="button" onclick="closeModal('create-modal')">Cancel</button>
+                    <button type="submit">Create Template</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Generate Test Document modal -->
+    <div class="modal-overlay" id="preview-modal">
+        <div class="modal">
+            <h2>Generate Test Document</h2>
+            <p class="modal-sub" id="preview-template-name"></p>
+            <p class="hint">Renders a sample PDF from this JSON payload without saving a document.</p>
+            <div class="field">
+                <label>Sample payload (JSON)</label>
+                <textarea id="preview-payload">{ "borrower_name": "Test Borrower" }</textarea>
+            </div>
+            <div id="preview-notice" class="notice error" style="display:none;"></div>
+            <div class="modal-actions">
+                <button type="button" onclick="closeModal('preview-modal')">Cancel</button>
+                <button type="button" id="preview-generate-btn">Generate</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="assets/console.js"></script>
+    <script>
+        const notice = document.getElementById("notice");
+        loadTopbar();
+
+        let appId = qs("appId");
+        let templatesCache = [];
+
+        function selectApp(newAppId) {
+            window.location.href = "templates.html?appId=" + encodeURIComponent(newAppId);
+        }
+
+        async function loadTemplates() {
+            templatesCache = await tsiCall("/api/v1/templates", "list_templates", { appId });
+            const body = document.getElementById("templates-body");
+            body.innerHTML = templatesCache.length === 0
+                ? '<tr><td colspan="4" class="muted">No templates yet.</td></tr>'
+                : templatesCache.map(t => `
+                    <tr>
+                        <td>${escapeHtml(t.templateName)}</td>
+                        <td>${escapeHtml(t.category) || "-"}</td>
+                        <td>${t.version}</td>
+                        <td><button class="secondary small" onclick="openPreview('${t.templateId}')">Generate Test Document</button></td>
+                    </tr>`).join("");
+        }
+
+        document.getElementById("new-template-btn").addEventListener("click", () => {
+            document.getElementById("template-form").reset();
+            document.getElementById("template-notice").style.display = "none";
+            openModal("create-modal");
+        });
+
+        document.getElementById("template-form").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const templateNotice = document.getElementById("template-notice");
+            showNotice(templateNotice, "");
+            try {
+                await tsiCall("/api/v1/templates", "create_template", {
+                    appId,
+                    templateName: document.getElementById("template-name").value,
+                    category: document.getElementById("template-category").value || null,
+                    htmlContent: document.getElementById("template-html").value
+                });
+                closeModal("create-modal");
+                loadTemplates();
+            } catch (err) {
+                showNotice(templateNotice, err.message);
+            }
+        });
+
+        let previewTemplateId = null;
+
+        function openPreview(templateId) {
+            previewTemplateId = templateId;
+            const t = templatesCache.find(x => x.templateId === templateId);
+            document.getElementById("preview-template-name").textContent = t ? t.templateName : "";
+            document.getElementById("preview-notice").style.display = "none";
+            openModal("preview-modal");
+        }
+
+        document.getElementById("preview-generate-btn").addEventListener("click", async () => {
+            const previewNotice = document.getElementById("preview-notice");
+            showNotice(previewNotice, "");
+            let payloadData;
+            try {
+                payloadData = JSON.parse(document.getElementById("preview-payload").value);
+            } catch (e) {
+                showNotice(previewNotice, "Sample payload must be valid JSON.");
+                return;
+            }
+            try {
+                await tsiOpenBlob("/api/v1/templates", "preview_template", {
+                    appId, templateId: previewTemplateId, payloadData
+                });
+            } catch (err) {
+                showNotice(previewNotice, err.message);
+            }
+        });
+
+        (async function init() {
+            try {
+                const apps = await tsiCall("/api/v1/admin/apps", "list_apps");
+                if (apps.length === 0) {
+                    document.getElementById("empty-state").style.display = "block";
+                    document.getElementById("new-template-btn").disabled = true;
+                    return;
+                }
+                if (!appId || !apps.some(a => a.appId === appId)) {
+                    appId = apps[0].appId;
+                }
+                const select = document.getElementById("app-select");
+                select.innerHTML = apps.map(a => `<option value="${escapeHtml(a.appId)}">${escapeHtml(a.appName)}</option>`).join("");
+                select.value = appId;
+                select.addEventListener("change", () => selectApp(select.value));
+
+                document.getElementById("content").style.display = "block";
+                await loadTemplates();
+            } catch (err) {
+                showNotice(notice, err.message);
+            }
+        })();
+    </script>
+</body>
+</html>

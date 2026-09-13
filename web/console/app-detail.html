@@ -2,24 +2,27 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>App Detail — TSI Sign Admin Console</title>
+    <title>App Detail - TSI Sign Admin Console</title>
     <link rel="stylesheet" href="assets/console.css">
 </head>
 <body>
     <header class="mobilebar">
-        <a class="brand" href="apps.html"><span class="mark">TS</span><span>TSI Sign</span></a>
+        <a class="brand" href="dashboard.html"><span class="mark">TS</span><span>TSI Sign</span></a>
     </header>
     <div class="app">
         <aside class="side">
-            <a class="brand" href="apps.html"><span class="mark">TS</span><span>TSI Sign</span></a>
+            <a class="brand" href="dashboard.html"><span class="mark">TS</span><span>TSI Sign</span></a>
             <nav class="nav">
+                <a href="dashboard.html">Dashboard</a>
                 <a href="apps.html" class="active">Apps</a>
-                <a href="legal-evidence.html">Legal Evidence</a>
-                <a href="platform-users.html" class="platform-admin-only">Platform Users</a>
+                <a href="templates.html">Templates</a>
+                <a href="documents.html">Documents</a>
+                <a href="legal-evidence.html">Legal</a>
+                <a href="users.html" class="platform-admin-only">Users</a>
             </nav>
             <div class="side-foot">
                 <div class="side-user-row">
-                    <div id="sidebar-user-avatar" class="avatar">–</div>
+                    <div id="sidebar-user-avatar" class="avatar">-</div>
                     <div style="min-width:0; flex:1;">
                         <div id="sidebar-user-name" class="side-user-name"></div>
                         <div id="sidebar-user-role" class="side-user-role"></div>
@@ -40,8 +43,6 @@
             <button class="active" data-tab="overview">Overview</button>
             <button data-tab="keys">API Keys</button>
             <button data-tab="signing">Signing Defaults</button>
-            <button data-tab="templates">Templates</button>
-            <button data-tab="documents">Documents</button>
             <button data-tab="admins">Admins</button>
         </div>
 
@@ -55,6 +56,12 @@
                     <div style="margin-top:16px;"><button type="submit">Save</button></div>
                 </form>
                 <div id="rate-limit-notice" class="notice success" style="display:none;"></div>
+            </div>
+            <div class="panel">
+                <h2 style="margin-top:0;">Templates &amp; Documents</h2>
+                <p class="muted">Manage this App's templates and documents from the top-level Templates / Documents pages.</p>
+                <a class="btn" id="view-templates-link">View Templates &rarr;</a>
+                <a class="btn secondary" id="view-documents-link" style="margin-left:8px;">View Documents &rarr;</a>
             </div>
         </div>
 
@@ -88,71 +95,17 @@
             </div>
         </div>
 
-        <div class="tab-panel" id="tab-templates">
-            <div class="panel">
-                <h2 style="margin-top:0;">Templates</h2>
-                <table>
-                    <thead><tr><th>Name</th><th>Category</th><th>Version</th><th></th></tr></thead>
-                    <tbody id="templates-body"><tr><td colspan="4" class="muted">Loading…</td></tr></tbody>
-                </table>
-            </div>
-
-            <div class="panel">
-                <h2 style="margin-top:0;">New Template</h2>
-                <form id="template-form">
-                    <div class="row">
-                        <div>
-                            <label>Template name</label>
-                            <input type="text" id="template-name" required placeholder="Sanction Letter">
-                        </div>
-                        <div>
-                            <label>Category (optional)</label>
-                            <input type="text" id="template-category" placeholder="LOAN">
-                        </div>
-                    </div>
-                    <label>HTML content (use {{field}} placeholders)</label>
-                    <textarea id="template-html" required>&lt;!DOCTYPE html&gt;
-&lt;html&gt;&lt;body&gt;
-  &lt;h1&gt;Agreement for {{borrower_name}}&lt;/h1&gt;
-&lt;/body&gt;&lt;/html&gt;</textarea>
-                    <div style="margin-top:16px;"><button type="submit">Create Template</button></div>
-                </form>
-            </div>
-
-            <div class="panel" id="preview-panel" style="display:none;">
-                <h2 style="margin-top:0;">Generate Test Document — <span id="preview-template-name"></span></h2>
-                <p class="muted">Renders a sample PDF from this JSON payload without saving a document.</p>
-                <label>Sample payload (JSON)</label>
-                <textarea id="preview-payload">{ "borrower_name": "Test Borrower" }</textarea>
-                <div style="margin-top:16px;">
-                    <button id="preview-generate-btn">Generate</button>
-                    <button class="secondary" id="preview-cancel-btn" type="button">Cancel</button>
-                </div>
-                <div id="preview-notice" class="notice error" style="display:none;"></div>
-            </div>
-        </div>
-
-        <div class="tab-panel" id="tab-documents">
-            <div class="panel">
-                <h2 style="margin-top:0;">Documents</h2>
-                <table>
-                    <thead><tr><th>Title</th><th>Template</th><th>Status</th><th>Created</th></tr></thead>
-                    <tbody id="documents-body"><tr><td colspan="4" class="muted">Loading…</td></tr></tbody>
-                </table>
-            </div>
-        </div>
-
         <div class="tab-panel" id="tab-admins">
             <div class="panel">
                 <h2 style="margin-top:0;">Admins</h2>
-                <p class="muted">Platform users (APP_MANAGER) assigned to administer this App (§4.2, app_admins).</p>
+                <p class="muted">Users with the App Manager role assigned to administer this App.</p>
                 <table>
                     <thead><tr><th>Name</th><th>Email</th><th></th></tr></thead>
                     <tbody id="admins-body"><tr><td colspan="3" class="muted">Loading…</td></tr></tbody>
                 </table>
                 <div class="row" style="margin-top:16px; align-items:flex-end;">
                     <div>
-                        <label>Add an existing platform user</label>
+                        <label>Add an existing user</label>
                         <select id="admin-user-select"></select>
                     </div>
                     <div style="flex:0;">
@@ -170,6 +123,8 @@
         const appId = qs("appId");
         const notice = document.getElementById("notice");
         loadTopbar();
+        document.getElementById("view-templates-link").href = "templates.html?appId=" + encodeURIComponent(appId);
+        document.getElementById("view-documents-link").href = "documents.html?appId=" + encodeURIComponent(appId);
 
         document.querySelectorAll(".tabs button").forEach(btn => {
             btn.addEventListener("click", () => {
@@ -189,8 +144,8 @@
                     <tr><th>App ID</th><td>${escapeHtml(app.appId)}</td></tr>
                     <tr><th>Slug</th><td>${escapeHtml(app.appSlug)}</td></tr>
                     <tr><th>Status</th><td><span class="badge ${app.isActive ? "active" : "inactive"}">${app.isActive ? "Active" : "Inactive"}</span></td></tr>
-                    <tr><th>Default provider</th><td>${escapeHtml(app.defaultProviderId) || '<span class="muted">—</span>'}</td></tr>
-                    <tr><th>Default key alias</th><td>${escapeHtml(app.defaultKeyAlias) || '<span class="muted">—</span>'}</td></tr>
+                    <tr><th>Default provider</th><td>${escapeHtml(app.defaultProviderId) || '<span class="muted">-</span>'}</td></tr>
+                    <tr><th>Default key alias</th><td>${escapeHtml(app.defaultKeyAlias) || '<span class="muted">-</span>'}</td></tr>
                     <tr><th>Storage backend</th><td class="muted">deployment default (local_fs)</td></tr>
                     <tr><th>Created</th><td>${escapeHtml(app.createdAt)}</td></tr>
                 </table>`;
@@ -224,7 +179,7 @@
                         <td>${escapeHtml(k.keyPrefix)}…</td>
                         <td><span class="badge ${k.isActive ? "active" : "inactive"}">${k.isActive ? "Active" : "Revoked"}</span></td>
                         <td class="muted">${escapeHtml(k.createdAt)}</td>
-                        <td class="muted">${escapeHtml(k.revokedAt) || "—"}</td>
+                        <td class="muted">${escapeHtml(k.revokedAt) || "-"}</td>
                         <td>${k.isActive ? `<button class="danger" onclick="revokeKey('${k.keyId}')">Revoke</button>` : ""}</td>
                     </tr>`).join("");
         }
@@ -268,85 +223,6 @@
             }
         });
 
-        let templatesCache = [];
-
-        async function loadTemplates() {
-            templatesCache = await tsiCall("/api/v1/templates", "list_templates", { appId });
-            const body = document.getElementById("templates-body");
-            body.innerHTML = templatesCache.length === 0
-                ? '<tr><td colspan="4" class="muted">No templates yet.</td></tr>'
-                : templatesCache.map(t => `
-                    <tr>
-                        <td>${escapeHtml(t.templateName)}</td>
-                        <td>${escapeHtml(t.category) || "—"}</td>
-                        <td>${t.version}</td>
-                        <td><button class="secondary" onclick="openPreview('${t.templateId}')">Generate Test Document</button></td>
-                    </tr>`).join("");
-        }
-
-        document.getElementById("template-form").addEventListener("submit", async (e) => {
-            e.preventDefault();
-            try {
-                await tsiCall("/api/v1/templates", "create_template", {
-                    appId,
-                    templateName: document.getElementById("template-name").value,
-                    category: document.getElementById("template-category").value || null,
-                    htmlContent: document.getElementById("template-html").value
-                });
-                document.getElementById("template-form").reset();
-                loadTemplates();
-            } catch (err) {
-                showNotice(notice, err.message);
-            }
-        });
-
-        let previewTemplateId = null;
-
-        function openPreview(templateId) {
-            previewTemplateId = templateId;
-            const t = templatesCache.find(x => x.templateId === templateId);
-            document.getElementById("preview-template-name").textContent = t ? t.templateName : "";
-            document.getElementById("preview-panel").style.display = "block";
-            document.getElementById("preview-panel").scrollIntoView({ behavior: "smooth" });
-        }
-
-        document.getElementById("preview-cancel-btn").addEventListener("click", () => {
-            document.getElementById("preview-panel").style.display = "none";
-        });
-
-        document.getElementById("preview-generate-btn").addEventListener("click", async () => {
-            const previewNotice = document.getElementById("preview-notice");
-            showNotice(previewNotice, "");
-            let payloadData;
-            try {
-                payloadData = JSON.parse(document.getElementById("preview-payload").value);
-            } catch (e) {
-                showNotice(previewNotice, "Sample payload must be valid JSON.");
-                return;
-            }
-            try {
-                await tsiOpenBlob("/api/v1/templates", "preview_template", {
-                    appId, templateId: previewTemplateId, payloadData
-                });
-            } catch (err) {
-                showNotice(previewNotice, err.message);
-            }
-        });
-
-        async function loadDocuments() {
-            const documents = await tsiCall("/api/v1/documents", "list_documents", { appId });
-            const body = document.getElementById("documents-body");
-            body.innerHTML = documents.length === 0
-                ? '<tr><td colspan="4" class="muted">No documents yet — generate one from a template via the API, or use "Generate Test Document" above (test documents are not saved).</td></tr>'
-                : documents.map(d => `
-                    <tr>
-                        <td><a href="document-detail.html?appId=${encodeURIComponent(appId)}&documentId=${encodeURIComponent(d.documentId)}">${escapeHtml(d.title)}</a></td>
-                        <td>${escapeHtml(d.templateName) || '<span class="muted">—</span>'}</td>
-                        <td><span class="badge ${d.status === "SIGNED" ? "active" : "inactive"}">${escapeHtml(d.status)}</span></td>
-                        <td class="muted">${escapeHtml(d.createdAt)}</td>
-                    </tr>`).join("");
-        }
-
         async function loadAdmins() {
             const [admins, allUsers] = await Promise.all([
                 tsiCall("/api/v1/admin/apps", "list_admins", { appId }),
@@ -367,7 +243,7 @@
             const assignedIds = new Set(admins.map(a => a.userId));
             const candidates = allUsers.filter(u => u.role === "APP_MANAGER" && !assignedIds.has(u.userId));
             select.innerHTML = candidates.length === 0
-                ? '<option value="">No available APP_MANAGER users</option>'
+                ? '<option value="">No available App Manager users</option>'
                 : candidates.map(u => `<option value="${escapeHtml(u.userId)}">${escapeHtml(u.fullName)} (${escapeHtml(u.email)})</option>`).join("");
         }
 
@@ -397,7 +273,7 @@
 
         (async function init() {
             try {
-                await Promise.all([loadOverview(), loadKeys(), loadTemplates(), loadDocuments(), loadAdmins()]);
+                await Promise.all([loadOverview(), loadKeys(), loadAdmins()]);
             } catch (err) {
                 showNotice(notice, err.message);
             }

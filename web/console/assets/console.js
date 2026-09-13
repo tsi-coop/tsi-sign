@@ -1,6 +1,6 @@
 // Shared admin console helpers. TSI framework standard pattern (matches
 // tsi-ledger/tsi-dpdp-cms/tsi-privacy-vault): every call is POST to a fixed
-// resource path with "_func" + params in the JSON body — no REST verbs, no
+// resource path with "_func" + params in the JSON body - no REST verbs, no
 // {id} path segments. No build step, plain fetch + DOM.
 
 async function apiFetch(path, options, skipAuthRedirect) {
@@ -70,6 +70,35 @@ function showNotice(el, message, type) {
     el.style.display = message ? "block" : "none";
 }
 
+/** Display-only role labels - the API/DB keep the raw enum values. */
+const ROLE_LABELS = { PLATFORM_ADMIN: "Admin", APP_MANAGER: "App Manager", AUDITOR: "Auditor" };
+function roleLabel(role) {
+    return ROLE_LABELS[role] || role;
+}
+
+/* ---------- Shared modal open/close (any page with a .modal-overlay) ---------- */
+
+function openModal(id) { document.getElementById(id).classList.add("open"); }
+function closeModal(id) { document.getElementById(id).classList.remove("open"); }
+
+async function copyText(text, btn) {
+    try {
+        await navigator.clipboard.writeText(text);
+    } catch (e) {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+    }
+    if (btn) {
+        const orig = btn.textContent;
+        btn.textContent = "Copied!";
+        setTimeout(() => { btn.textContent = orig; }, 1200);
+    }
+}
+
 async function loadTopbar() {
     const nameEl = document.getElementById("sidebar-user-name");
     const roleEl = document.getElementById("sidebar-user-role");
@@ -78,14 +107,14 @@ async function loadTopbar() {
     try {
         const me = await tsiCall("/api/v1/admin/auth", "me", {}, true);
         nameEl.textContent = me.fullName;
-        if (roleEl) roleEl.textContent = me.role;
+        if (roleEl) roleEl.textContent = roleLabel(me.role);
         if (avatarEl) {
             const initials = (me.fullName || "").trim().split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
             avatarEl.textContent = initials || "U";
         }
-        // Platform-admin-only nav items (Platform Users & Roles, §10.9) —
-        // the backend still enforces this; hiding the link just avoids
-        // showing a page that would immediately 403.
+        // Admin-only nav items (Users & Roles, §10.9) - the backend still
+        // enforces this; hiding the link just avoids showing a page that
+        // would immediately 403.
         document.querySelectorAll(".platform-admin-only").forEach(node => {
             node.style.display = me.role === "PLATFORM_ADMIN" ? "" : "none";
         });

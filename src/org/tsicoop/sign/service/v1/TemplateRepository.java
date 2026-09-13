@@ -8,6 +8,7 @@ import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /** App-scoped template CRUD (§4.2: templates are namespaced per App). */
 public class TemplateRepository {
@@ -107,5 +108,42 @@ public class TemplateRepository {
         } finally {
             pool.cleanup(rs, ps, con);
         }
+    }
+
+    /** Dashboard aggregate (§10.1): template count across every App the caller can see - null appIds means every App. */
+    public int countForApps(Set<String> appIds) throws Exception {
+        if (appIds != null && appIds.isEmpty()) return 0;
+        Connection con = null;
+        PreparedStatement ps = null;
+        ResultSet rs = null;
+        PoolDB pool = new PoolDB();
+        try {
+            con = pool.getConnection();
+            String sql = "SELECT COUNT(*) FROM templates";
+            if (appIds != null) {
+                sql += " WHERE app_id IN (" + placeholders(appIds.size()) + ")";
+            }
+            ps = con.prepareStatement(sql);
+            if (appIds != null) {
+                int i = 1;
+                for (String appId : appIds) {
+                    ps.setString(i++, appId);
+                }
+            }
+            rs = ps.executeQuery();
+            rs.next();
+            return rs.getInt(1);
+        } finally {
+            pool.cleanup(rs, ps, con);
+        }
+    }
+
+    private static String placeholders(int count) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < count; i++) {
+            if (i > 0) sb.append(",");
+            sb.append("?::uuid");
+        }
+        return sb.toString();
     }
 }

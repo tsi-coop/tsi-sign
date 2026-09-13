@@ -93,7 +93,7 @@
             const password = document.getElementById("setup-password").value;
             await tsiCall("/api/v1/admin/setup", "setup", { fullName, email, password }, true);
             await tsiCall("/api/v1/admin/auth", "login", { email, password }, true);
-            window.location.href = "apps.html";
+            window.location.href = "dashboard.html";
         } catch (err) {
             showNotice(notice, err.message);
         }
@@ -105,7 +105,7 @@
             const email = document.getElementById("login-email").value;
             const password = document.getElementById("login-password").value;
             await tsiCall("/api/v1/admin/auth", "login", { email, password }, true);
-            window.location.href = "apps.html";
+            window.location.href = "dashboard.html";
         } catch (err) {
             showNotice(notice, err.message);
         }

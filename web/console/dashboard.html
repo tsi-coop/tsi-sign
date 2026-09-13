@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard - TSI Sign Admin Console</title>
+    <link rel="stylesheet" href="assets/console.css">
+</head>
+<body>
+    <header class="mobilebar">
+        <a class="brand" href="dashboard.html"><span class="mark">TS</span><span>TSI Sign</span></a>
+    </header>
+    <div class="app">
+        <aside class="side">
+            <a class="brand" href="dashboard.html"><span class="mark">TS</span><span>TSI Sign</span></a>
+            <nav class="nav">
+                <a href="dashboard.html" class="active">Dashboard</a>
+                <a href="apps.html">Apps</a>
+                <a href="templates.html">Templates</a>
+                <a href="documents.html">Documents</a>
+                <a href="legal-evidence.html">Legal</a>
+                <a href="users.html" class="platform-admin-only">Users</a>
+            </nav>
+            <div class="side-foot">
+                <div class="side-user-row">
+                    <div id="sidebar-user-avatar" class="avatar">-</div>
+                    <div style="min-width:0; flex:1;">
+                        <div id="sidebar-user-name" class="side-user-name"></div>
+                        <div id="sidebar-user-role" class="side-user-role"></div>
+                    </div>
+                </div>
+                <a href="#" onclick="logout(); return false;" class="signout">Sign Out</a>
+            </div>
+        </aside>
+
+        <main class="main">
+        <div class="eyebrow">Admin Console</div>
+        <h1>Dashboard</h1>
+        <p class="subtitle">Isolated Apps, each with its own API key, template namespace, and signer pool on one shared engine.</p>
+
+        <div id="notice" class="notice error" style="display:none;"></div>
+
+        <div class="stat-grid">
+            <div class="stat-card ok"><div class="label">Apps</div><div class="value" id="stat-apps">-</div></div>
+            <div class="stat-card"><div class="label">Templates</div><div class="value" id="stat-templates">-</div></div>
+            <div class="stat-card ok"><div class="label">Signed Documents</div><div class="value" id="stat-signed">-</div></div>
+            <div class="stat-card"><div class="label">Waiting for Signing</div><div class="value" id="stat-waiting">-</div></div>
+            <div class="stat-card platform-admin-only"><div class="label">Users</div><div class="value" id="stat-users">-</div></div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-head"><h2>Recent Apps</h2><a class="btn secondary" href="apps.html">View All</a></div>
+            <table>
+                <thead><tr><th>App Name</th><th>Slug</th><th>Status</th><th>Created</th></tr></thead>
+                <tbody id="recent-apps-body"><tr><td colspan="4" class="muted">Loading...</td></tr></tbody>
+            </table>
+        </div>
+        </main>
+    </div>
+
+    <script src="assets/console.js"></script>
+    <script>
+        const notice = document.getElementById("notice");
+        loadTopbar();
+
+        async function load() {
+            try {
+                const stats = await tsiCall("/api/v1/admin/dashboard", "get_stats", {});
+                document.getElementById("stat-apps").textContent = stats.totalApps;
+                document.getElementById("stat-templates").textContent = stats.totalTemplates;
+                document.getElementById("stat-signed").textContent = stats.documentsSigned;
+                document.getElementById("stat-waiting").textContent = stats.documentsWaiting;
+            } catch (err) {
+                showNotice(notice, err.message);
+            }
+
+            try {
+                const apps = await tsiCall("/api/v1/admin/apps", "list_apps");
+                const recent = apps.slice(0, 8);
+                document.getElementById("recent-apps-body").innerHTML = recent.length === 0
+                    ? '<tr><td colspan="4" class="muted">No Apps yet.</td></tr>'
+                    : recent.map(a => `
+                        <tr>
+                            <td><a href="app-detail.html?appId=${encodeURIComponent(a.appId)}">${escapeHtml(a.appName)}</a></td>
+                            <td>${escapeHtml(a.appSlug)}</td>
+                            <td><span class="badge ${a.isActive ? "active" : "inactive"}">${a.isActive ? "Active" : "Inactive"}</span></td>
+                            <td class="muted">${escapeHtml(a.createdAt)}</td>
+                        </tr>`).join("");
+            } catch (err) {
+                showNotice(notice, err.message);
+            }
+
+            try {
+                const users = await tsiCall("/api/v1/admin/platform-users", "list_users", {});
+                document.getElementById("stat-users").textContent = users.length;
+            } catch (e) {
+                document.getElementById("stat-users").textContent = "-";
+            }
+        }
+
+        load();
+    </script>
+</body>
+</html>

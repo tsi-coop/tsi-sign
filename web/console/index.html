@@ -8,12 +8,12 @@
 <script src="assets/console.js"></script>
 <script>
     // Check auth state before redirecting, instead of always bouncing to
-    // apps.html first — that would fire an unauthenticated call (401) on
-    // every fresh visit before landing on login.html.
+    // dashboard.html first - that would fire an unauthenticated call (401)
+    // on every fresh visit before landing on login.html.
     (async function () {
         try {
             await tsiCall("/api/v1/admin/auth", "me", {}, true);
-            window.location.replace("apps.html");
+            window.location.replace("dashboard.html");
         } catch (e) {
             window.location.replace("login.html");
         }

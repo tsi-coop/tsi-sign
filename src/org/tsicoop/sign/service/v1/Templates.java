@@ -23,9 +23,8 @@ import java.util.UUID;
  * admin console both operate on templates, so this is one Action branching
  * on which identity resolved rather than two classes duplicating the same
  * SQL. funcs:
- *  - create_template: BOTH — tenant creates under its own App; console
- *    creates under a body-supplied appId (RBAC-checked, §10.9).
- *  - generate_document: TENANT only (§4 pipeline; a real, persisted document).
+ *  - create_template, generate_document: BOTH — tenant acts under its own
+ *    App; console acts under a body-supplied appId (RBAC-checked, §10.9).
  *  - list_templates, preview_template: CONSOLE only (§10.3; "Generate Test
  *    Document" persists nothing). A bare API-key caller has no role, so
  *    AuthorizationService naturally 403s these rather than needing a
@@ -60,11 +59,6 @@ public class Templates implements Action {
                     createTemplate(req, res, body, appContext);
                     break;
                 case "generate_document":
-                    if (appContext == null) {
-                        OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request",
-                                "This operation requires an App API key.");
-                        return;
-                    }
                     generateDocument(req, res, body, appContext);
                     break;
                 case "list_templates":
@@ -127,8 +121,32 @@ public class Templates implements Action {
             OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request", "templateId is required.");
             return;
         }
+
+        String appId;
+        String appSlug;
+        if (appContext != null) {
+            appId = appContext.appId();
+            appSlug = appContext.appSlug();
+        } else {
+            appId = body.path("appId").asText(null);
+            if (appId == null) {
+                OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request", "appId is required.");
+                return;
+            }
+            if (!authorizationService.canWrite(InputProcessor.getUserRole(req), InputProcessor.getUserId(req), appId)) {
+                OutputProcessor.errorResponse(res, HttpServletResponse.SC_FORBIDDEN, "Forbidden", "You do not have write access to this App.");
+                return;
+            }
+            Optional<AppRepository.AppRecord> appOpt = appRepository.findById(appId);
+            if (appOpt.isEmpty()) {
+                OutputProcessor.errorResponse(res, HttpServletResponse.SC_NOT_FOUND, "Not Found", "No such App.");
+                return;
+            }
+            appSlug = appOpt.get().appSlug();
+        }
+
         Optional<TemplateRepository.TemplateRecord> template =
-                templateRepository.findByIdForApp(appContext.appId(), templateId);
+                templateRepository.findByIdForApp(appId, templateId);
         if (template.isEmpty()) {
             OutputProcessor.errorResponse(res, HttpServletResponse.SC_NOT_FOUND, "Not Found", "No such template.");
             return;
@@ -148,11 +166,14 @@ public class Templates implements Action {
         DocumentGenerationResult generated = generatorService.generatePdf(template.get().htmlContent(), payloadData);
 
         String documentId = UUID.randomUUID().toString();
-        StorageObjectRef ref = storageProvider.store(appContext.appSlug(), documentId, "original", generated.pdfBytes());
+        StorageObjectRef ref = storageProvider.store(appSlug, documentId, "original", generated.pdfBytes());
 
-        documentRepository.createDraftWithId(documentId, appContext.appId(), templateId, documentTitle,
+        documentRepository.createDraftWithId(documentId, appId, templateId, documentTitle,
                 ref.providerId(), ref.storageKey(), generated.sha256Hash());
-        auditLogRepository.log(appContext.appId(), documentId, "DOCUMENT_CREATED", "APP", appContext.appId(),
+
+        String actorType = appContext != null ? "APP" : "PLATFORM_USER";
+        String actorId = appContext != null ? appContext.appId() : InputProcessor.getUserId(req);
+        auditLogRepository.log(appId, documentId, "DOCUMENT_CREATED", actorType, actorId,
                 req.getRemoteAddr(), req.getHeader("User-Agent"));
 
         ObjectNode json = MAPPER.createObjectNode();

@@ -2,24 +2,27 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Document Detail — TSI Sign Admin Console</title>
+    <title>Document Detail - TSI Sign Admin Console</title>
     <link rel="stylesheet" href="assets/console.css">
 </head>
 <body>
     <header class="mobilebar">
-        <a class="brand" href="apps.html"><span class="mark">TS</span><span>TSI Sign</span></a>
+        <a class="brand" href="dashboard.html"><span class="mark">TS</span><span>TSI Sign</span></a>
     </header>
     <div class="app">
         <aside class="side">
-            <a class="brand" href="apps.html"><span class="mark">TS</span><span>TSI Sign</span></a>
+            <a class="brand" href="dashboard.html"><span class="mark">TS</span><span>TSI Sign</span></a>
             <nav class="nav">
-                <a href="apps.html" class="active">Apps</a>
-                <a href="legal-evidence.html">Legal Evidence</a>
-                <a href="platform-users.html" class="platform-admin-only">Platform Users</a>
+                <a href="dashboard.html">Dashboard</a>
+                <a href="apps.html">Apps</a>
+                <a href="templates.html">Templates</a>
+                <a href="documents.html" class="active">Documents</a>
+                <a href="legal-evidence.html">Legal</a>
+                <a href="users.html" class="platform-admin-only">Users</a>
             </nav>
             <div class="side-foot">
                 <div class="side-user-row">
-                    <div id="sidebar-user-avatar" class="avatar">–</div>
+                    <div id="sidebar-user-avatar" class="avatar">-</div>
                     <div style="min-width:0; flex:1;">
                         <div id="sidebar-user-name" class="side-user-name"></div>
                         <div id="sidebar-user-role" class="side-user-role"></div>
@@ -30,7 +33,7 @@
         </aside>
 
         <main class="main">
-        <p class="subtitle"><a id="back-link" href="apps.html">&larr; App</a></p>
+        <p class="subtitle"><a id="back-link" href="documents.html">&larr; Documents</a></p>
         <h1 id="doc-title">Loading…</h1>
 
         <div id="notice" class="notice error" style="display:none;"></div>
@@ -63,7 +66,7 @@
         const appId = qs("appId");
         const documentId = qs("documentId");
         const notice = document.getElementById("notice");
-        document.getElementById("back-link").href = "app-detail.html?appId=" + encodeURIComponent(appId);
+        document.getElementById("back-link").href = "documents.html?appId=" + encodeURIComponent(appId);
         loadTopbar();
 
         let currentDoc = null;
@@ -72,20 +75,34 @@
             currentDoc = await tsiCall("/api/v1/documents", "get_document", { appId, documentId });
             document.getElementById("doc-title").textContent = currentDoc.title;
 
+            const canSeal = currentDoc.status === "DRAFT" || currentDoc.status === "PENDING";
             document.getElementById("overview-panel").innerHTML = `
                 <table>
                     <tr><th>Document ID</th><td>${escapeHtml(currentDoc.documentId)}</td></tr>
                     <tr><th>Status</th><td><span class="badge ${currentDoc.status === "SIGNED" ? "active" : "inactive"}">${escapeHtml(currentDoc.status)}</span></td></tr>
                     <tr><th>Original Hash (SHA-256)</th><td style="font-family:ui-monospace,monospace; font-size:12px;">${escapeHtml(currentDoc.originalHash)}</td></tr>
-                    <tr><th>Sealed Hash (SHA-256)</th><td style="font-family:ui-monospace,monospace; font-size:12px;">${escapeHtml(currentDoc.sealedHash) || '<span class="muted">—</span>'}</td></tr>
+                    <tr><th>Sealed Hash (SHA-256)</th><td style="font-family:ui-monospace,monospace; font-size:12px;">${escapeHtml(currentDoc.sealedHash) || '<span class="muted">-</span>'}</td></tr>
                 </table>
                 <div style="margin-top:16px;">
                     <button id="download-document-btn">Download ${currentDoc.hasSealed ? "Signed" : "Original"} PDF</button>
-                </div>`;
+                    ${canSeal ? '<button id="seal-document-btn" style="margin-left:8px;">Seal / Sign Document</button>' : ""}
+                </div>
+                <div id="seal-notice" class="notice error" style="display:none; margin-top:12px;"></div>`;
             document.getElementById("download-document-btn").addEventListener("click", () => {
                 tsiOpenBlob("/api/v1/documents", "download_document", { appId, documentId })
                     .catch(err => showNotice(notice, err.message));
             });
+            if (canSeal) {
+                document.getElementById("seal-document-btn").addEventListener("click", async () => {
+                    const sealNotice = document.getElementById("seal-notice");
+                    try {
+                        await tsiCall("/api/v1/documents", "seal_local", { appId, documentId });
+                        await load();
+                    } catch (err) {
+                        showNotice(sealNotice, err.message);
+                    }
+                });
+            }
 
             const sealsBody = document.getElementById("seals-body");
             sealsBody.innerHTML = currentDoc.seals.length === 0
@@ -93,8 +110,8 @@
                 : currentDoc.seals.map(s => `
                     <tr>
                         <td>${escapeHtml(s.providerId)}</td>
-                        <td>${escapeHtml(s.keyAlias) || "—"}</td>
-                        <td>${escapeHtml(s.signatureStandard) || "—"}</td>
+                        <td>${escapeHtml(s.keyAlias) || "-"}</td>
+                        <td>${escapeHtml(s.signatureStandard) || "-"}</td>
                         <td class="muted">${escapeHtml(s.sealedAt)}</td>
                     </tr>`).join("");
 
@@ -105,7 +122,7 @@
                     <tr>
                         <td>${escapeHtml(a.eventType)}</td>
                         <td>${escapeHtml(a.actorType)}</td>
-                        <td class="muted">${escapeHtml(a.ipAddress) || "—"}</td>
+                        <td class="muted">${escapeHtml(a.ipAddress) || "-"}</td>
                         <td class="muted">${escapeHtml(a.createdAt)}</td>
                     </tr>`).join("");
 
