@@ -6,11 +6,15 @@ import java.io.IOException;
 import java.util.Properties;
 
 /**
- * Holds DB connection settings read from environment variables at container
- * startup (AppBootstrapListener), and the _processor.tsi service registry
- * InterceptingFilter dispatches on (§6, TSI framework standard pattern —
- * matches tsi-ledger/tsi-dpdp-cms/tsi-privacy-vault). Same env var names as
- * the DB host string passed to Flyway: POSTGRES_HOST is the full
+ * Holds DB connection settings read from environment variables at filter
+ * startup (InterceptingFilter.init), and the _processor.tsi service
+ * registry InterceptingFilter dispatches on (§6, TSI framework standard
+ * pattern - matches tsi-compass/tsi-ledger/tsi-dpdp-cms/tsi-privacy-vault).
+ * Schema itself is not managed here or by any Java code: db/*.sql is
+ * mounted onto Postgres's own /docker-entrypoint-initdb.d and runs once,
+ * automatically, the first time the container starts against an empty
+ * data volume - the same mechanism every sibling TSI product uses, and no
+ * migration-tracking library is involved. POSTGRES_HOST is the full
  * "jdbc:postgresql://host:port" prefix, not just a hostname.
  */
 public class SystemConfig {

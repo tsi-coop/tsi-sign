@@ -30,10 +30,6 @@
 		<url-pattern>/</url-pattern>
 	</servlet-mapping>
 
-	<listener>
-		<listener-class>org.tsicoop.sign.framework.AppBootstrapListener</listener-class>
-	</listener>
-
 	<!--
 	  TSI framework standard pattern (matches tsi-ledger/tsi-dpdp-cms/
 	  tsi-privacy-vault): a single InterceptingFilter dispatches every

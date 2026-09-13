@@ -149,7 +149,8 @@ public class InterceptingFilter implements Filter {
     @Override
     public void init(FilterConfig filterConfig) throws ServletException {
         SystemConfig.loadProcessorConfig(filterConfig.getServletContext());
-        System.out.println("TSI Sign: loaded _processor.tsi; started in "
+        SystemConfig.loadAppConfig(filterConfig.getServletContext());
+        System.out.println("TSI Sign: loaded _processor.tsi and app config; started in "
                 + System.getenv("TSI_SIGN_ENV") + " environment");
     }
 }
