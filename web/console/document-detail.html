@@ -40,6 +40,14 @@
 
         <div class="panel" id="overview-panel">Loading…</div>
 
+        <h2>Signers (Aadhaar eSign)</h2>
+        <div class="panel">
+            <table>
+                <thead><tr><th>Name</th><th>Type</th><th>Status</th><th>Signed At</th><th></th></tr></thead>
+                <tbody id="signers-body"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
+            </table>
+        </div>
+
         <h2>Seals</h2>
         <div class="panel">
             <table>
@@ -61,6 +69,43 @@
         </main>
     </div>
 
+    <!-- Send for Aadhaar eSign modal -->
+    <div class="modal-overlay" id="esign-modal">
+        <div class="modal">
+            <h2>Send for Aadhaar eSign</h2>
+            <p class="modal-sub">Only the mock ESP (local evaluation) is configured in this deployment - no real
+                Aadhaar OTP/biometric authentication happens.</p>
+            <form id="esign-form">
+                <div class="field"><label>Signer name</label><input type="text" id="esign-signer-name" required></div>
+                <div class="field"><label>Signer email (optional)</label><input type="email" id="esign-signer-email"></div>
+                <div class="field"><label>Signer phone (optional)</label><input type="text" id="esign-signer-phone"></div>
+                <div class="field"><label>Reason (optional)</label><input type="text" id="esign-reason" placeholder="e.g. Loan agreement execution"></div>
+                <div id="esign-notice" class="notice error" style="display:none;"></div>
+                <div class="modal-actions">
+                    <button type="button" onclick="closeModal('esign-modal')">Cancel</button>
+                    <button type="submit">Send</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Aadhaar eSign initiated - link to the (mock) consent page -->
+    <div class="modal-overlay" id="esign-initiated-modal">
+        <div class="modal">
+            <h2>eSign Request Sent</h2>
+            <p>The signer needs to complete authentication at the link below (in a real deployment, this would be
+                sent to them directly rather than shown here).</p>
+            <div class="key-box">
+                <span id="esign-gateway-url" style="overflow:hidden;text-overflow:ellipsis"></span>
+                <button class="small" onclick="copyText(document.getElementById('esign-gateway-url').textContent, this)">Copy</button>
+            </div>
+            <div class="modal-actions">
+                <button onclick="closeModal('esign-initiated-modal')">Close</button>
+                <button class="primary" id="esign-open-gateway-btn">Open Consent Page</button>
+            </div>
+        </div>
+    </div>
+
     <script src="assets/console.js"></script>
     <script>
         const appId = qs("appId");
@@ -75,7 +120,7 @@
             currentDoc = await tsiCall("/api/v1/documents", "get_document", { appId, documentId });
             document.getElementById("doc-title").textContent = currentDoc.title;
 
-            const canSeal = currentDoc.status === "DRAFT" || currentDoc.status === "PENDING";
+            const canSeal = currentDoc.status === "DRAFT";
             document.getElementById("overview-panel").innerHTML = `
                 <table>
                     <tr><th>Document ID</th><td>${escapeHtml(currentDoc.documentId)}</td></tr>
@@ -85,7 +130,8 @@
                 </table>
                 <div style="margin-top:16px;">
                     <button id="download-document-btn">Download ${currentDoc.hasSealed ? "Signed" : "Original"} PDF</button>
-                    ${canSeal ? '<button id="seal-document-btn" style="margin-left:8px;">Seal / Sign Document</button>' : ""}
+                    ${currentDoc.status === "DRAFT" ? '<button id="seal-document-btn" style="margin-left:8px;">Apply Corporate Seal</button>' : ""}
+                    ${currentDoc.status === "DRAFT" ? '<button class="secondary" id="esign-btn" style="margin-left:8px;">Send for Aadhaar eSign</button>' : ""}
                 </div>
                 <div id="seal-notice" class="notice error" style="display:none; margin-top:12px;"></div>`;
             document.getElementById("download-document-btn").addEventListener("click", () => {
@@ -102,7 +148,24 @@
                         showNotice(sealNotice, err.message);
                     }
                 });
+                document.getElementById("esign-btn").addEventListener("click", () => {
+                    document.getElementById("esign-form").reset();
+                    document.getElementById("esign-notice").style.display = "none";
+                    openModal("esign-modal");
+                });
             }
+
+            const signersBody = document.getElementById("signers-body");
+            signersBody.innerHTML = currentDoc.signers.length === 0
+                ? '<tr><td colspan="5" class="muted">No signers yet - use "Send for Aadhaar eSign" above.</td></tr>'
+                : currentDoc.signers.map(s => `
+                    <tr>
+                        <td>${escapeHtml(s.signerName)}</td>
+                        <td>${escapeHtml(s.signatureType)}</td>
+                        <td><span class="badge ${s.status === "SIGNED" ? "active" : s.status === "FAILED" ? "inactive" : "neutral"}">${escapeHtml(s.status)}</span></td>
+                        <td class="muted">${escapeHtml(s.signedAt) || "-"}</td>
+                        <td>${s.gatewayUrl ? `<a class="btn secondary" href="${escapeHtml(s.gatewayUrl)}" target="_blank" rel="noopener">Open Consent Page</a>` : ""}</td>
+                    </tr>`).join("");
 
             const sealsBody = document.getElementById("seals-body");
             sealsBody.innerHTML = currentDoc.seals.length === 0
@@ -128,6 +191,27 @@
 
             renderLegalPanel();
         }
+
+        document.getElementById("esign-form").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const esignNotice = document.getElementById("esign-notice");
+            try {
+                const result = await tsiCall("/api/v1/documents", "initiate_esign", {
+                    appId, documentId,
+                    signerName: document.getElementById("esign-signer-name").value.trim(),
+                    signerEmail: document.getElementById("esign-signer-email").value.trim() || null,
+                    signerPhone: document.getElementById("esign-signer-phone").value.trim() || null,
+                    reason: document.getElementById("esign-reason").value.trim() || null
+                });
+                closeModal("esign-modal");
+                document.getElementById("esign-gateway-url").textContent = result.gatewayUrl;
+                document.getElementById("esign-open-gateway-btn").onclick = () => window.open(result.gatewayUrl, "_blank");
+                openModal("esign-initiated-modal");
+                await load();
+            } catch (err) {
+                showNotice(esignNotice, err.message);
+            }
+        });
 
         function renderLegalPanel() {
             const panel = document.getElementById("legal-panel");

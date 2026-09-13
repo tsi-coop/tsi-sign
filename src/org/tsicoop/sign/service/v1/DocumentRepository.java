@@ -102,6 +102,93 @@ public class DocumentRepository {
         }
     }
 
+    /**
+     * Unscoped by appId - only used from the eSign callback path (§ Aadhaar
+     * eSign plan), which has no caller-supplied appId to scope by. Safe
+     * there because that path only ever reaches a documentId via an
+     * esign_sessions row keyed by a UUID transaction_id known only to the
+     * legitimate in-flight session, not via untrusted caller input.
+     */
+    public Optional<DocumentRecord> findById(String documentId) {
+        Connection con = null;
+        PreparedStatement ps = null;
+        ResultSet rs = null;
+        PoolDB pool = null;
+        try {
+            pool = new PoolDB();
+            con = pool.getConnection();
+            ps = con.prepareStatement("SELECT document_id, app_id, template_id, title, storage_provider_id, " +
+                    "original_storage_key, original_hash, sealed_storage_key, sealed_hash, status " +
+                    "FROM documents WHERE document_id = ?::uuid");
+            ps.setString(1, documentId);
+            rs = ps.executeQuery();
+            if (rs.next()) {
+                return Optional.of(new DocumentRecord(
+                        rs.getString("document_id"),
+                        rs.getString("app_id"),
+                        rs.getString("template_id"),
+                        rs.getString("title"),
+                        rs.getString("storage_provider_id"),
+                        rs.getString("original_storage_key"),
+                        rs.getString("original_hash"),
+                        rs.getString("sealed_storage_key"),
+                        rs.getString("sealed_hash"),
+                        rs.getString("status")));
+            }
+            return Optional.empty();
+        } catch (Exception e) {
+            return Optional.empty();
+        } finally {
+            if (pool != null) pool.cleanup(rs, ps, con);
+        }
+    }
+
+    public void markPending(String documentId) throws Exception {
+        Connection con = null;
+        PreparedStatement ps = null;
+        PoolDB pool = new PoolDB();
+        try {
+            con = pool.getConnection();
+            ps = con.prepareStatement("UPDATE documents SET status = 'PENDING', updated_at = now() " +
+                    "WHERE document_id = ?::uuid");
+            ps.setString(1, documentId);
+            ps.executeUpdate();
+        } finally {
+            pool.cleanup(null, ps, con);
+        }
+    }
+
+    public void markExpired(String documentId) throws Exception {
+        Connection con = null;
+        PreparedStatement ps = null;
+        PoolDB pool = new PoolDB();
+        try {
+            con = pool.getConnection();
+            ps = con.prepareStatement("UPDATE documents SET status = 'EXPIRED', updated_at = now() " +
+                    "WHERE document_id = ?::uuid");
+            ps.setString(1, documentId);
+            ps.executeUpdate();
+        } finally {
+            pool.cleanup(null, ps, con);
+        }
+    }
+
+    /** Reverts a PENDING document back to DRAFT after a failed/denied eSign attempt, so it can be retried. */
+    public void markDraft(String documentId) throws Exception {
+        Connection con = null;
+        PreparedStatement ps = null;
+        PoolDB pool = new PoolDB();
+        try {
+            con = pool.getConnection();
+            ps = con.prepareStatement("UPDATE documents SET status = 'DRAFT', updated_at = now() " +
+                    "WHERE document_id = ?::uuid");
+            ps.setString(1, documentId);
+            ps.executeUpdate();
+        } finally {
+            pool.cleanup(null, ps, con);
+        }
+    }
+
     public void markSealed(String documentId, String sealedStorageKey, String sealedHash) throws Exception {
         Connection con = null;
         PreparedStatement ps = null;

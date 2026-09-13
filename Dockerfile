@@ -18,14 +18,28 @@ RUN mkdir -p /data/tsi-sign/documents && chown -R jetty:jetty /data/tsi-sign
 
 # Local PKI evaluation keystore (§7, §10.6): a self-signed dev keypair under
 # alias "tsi_corporate_seal" so a fresh self-hosted deployment can seal
-# documents immediately with zero setup. Real deployments should replace
-# this with an org-issued cert (KEYSTORE_PATH/KEYSTORE_PASSWORD env vars) —
+# documents immediately with zero setup. Corporate Seal stays strictly
+# self-signed .pfx by design (see prep/TSI-Sign-Visible-Signature-
+# Placeholder-Plan.md) - a real deployment swaps in the org's own
+# self-generated cert here (real org name/details), never a CA-issued one;
 # the admin console gets an upload/rotate workflow for this in Chunk 11.
+#
+# A second, deliberately distinct keypair under alias "mock_aadhaar_esign"
+# stands in for a real CCA-licensed ESP (eMudhra/C-DAC/NSDL) in
+# MockAadhaarEsignAdapter (prep/TSI-Sign-Aadhaar-eSign-Plan.md) - its own
+# CN ensures a stamp can never be confused between "the org's own seal" and
+# "an individual's Aadhaar eSign," even in local evaluation.
 RUN mkdir -p /etc/tsi-sign && \
     keytool -genkeypair \
         -alias tsi_corporate_seal \
         -keyalg RSA -keysize 2048 -validity 3650 \
         -dname "CN=TSI Sign Local Dev, OU=TSI Coop, O=TSI Coop, L=Coimbatore, ST=TN, C=IN" \
+        -keystore /etc/tsi-sign/keystore.p12 -storetype PKCS12 \
+        -storepass changeit -keypass changeit && \
+    keytool -genkeypair \
+        -alias mock_aadhaar_esign \
+        -keyalg RSA -keysize 2048 -validity 3650 \
+        -dname "CN=TSI Mock Aadhaar eSign CA, OU=TSI Coop Sandbox, O=TSI Coop, L=Coimbatore, ST=TN, C=IN" \
         -keystore /etc/tsi-sign/keystore.p12 -storetype PKCS12 \
         -storepass changeit -keypass changeit && \
     chown -R jetty:jetty /etc/tsi-sign

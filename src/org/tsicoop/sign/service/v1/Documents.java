@@ -10,6 +10,11 @@ import org.tsicoop.sign.framework.Action;
 import org.tsicoop.sign.framework.AppContext;
 import org.tsicoop.sign.framework.InputProcessor;
 import org.tsicoop.sign.framework.OutputProcessor;
+import org.tsicoop.sign.esign.EsignSessionRepository;
+import org.tsicoop.sign.esign.ExternalCmsSpliceService;
+import org.tsicoop.sign.esign.MockAadhaarEsignAdapter;
+import org.tsicoop.sign.esign.SigningSessionRequest;
+import org.tsicoop.sign.esign.SigningSessionResponse;
 import org.tsicoop.sign.pki.LocalKeyStoreProvider;
 import org.tsicoop.sign.pki.LocalPkiSigningService;
 import org.tsicoop.sign.storage.DocumentStorageProvider;
@@ -18,6 +23,7 @@ import org.tsicoop.sign.storage.StorageObjectRef;
 
 import java.time.Instant;
 import java.util.Base64;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -45,6 +51,7 @@ public class Documents implements Action {
 
     private final AppRepository appRepository = new AppRepository();
     private final DocumentRepository documentRepository = new DocumentRepository();
+    private final DocumentSignerRepository documentSignerRepository = new DocumentSignerRepository();
     private final AuditLogRepository auditLogRepository = new AuditLogRepository();
     private final PlatformUserRepository platformUserRepository = new PlatformUserRepository();
     private final LegalCertificateRepository legalCertificateRepository = new LegalCertificateRepository();
@@ -52,14 +59,41 @@ public class Documents implements Action {
     private final AuthorizationService authorizationService = new AuthorizationService();
     private final LocalPkiSigningService signingService;
     private final LegalCertificateService legalCertificateService;
+    private final EsignSessionRepository esignSessionRepository = new EsignSessionRepository();
+    private final ExternalCmsSpliceService externalCmsSpliceService = new ExternalCmsSpliceService();
+    private final MockAadhaarEsignAdapter mockAadhaarEsignAdapter;
 
     public Documents() {
         try {
             signingService = new LocalPkiSigningService(new LocalKeyStoreProvider());
+            mockAadhaarEsignAdapter = new MockAadhaarEsignAdapter(new LocalKeyStoreProvider(), consoleBaseUrl());
         } catch (Exception e) {
             throw new RuntimeException("Failed to initialize Local PKI signing service", e);
         }
         legalCertificateService = new LegalCertificateService(signingService, storageProvider);
+    }
+
+    /** Base URL the mock ESP's gatewayUrl is built against - overridable for non-default deployments. */
+    private static String consoleBaseUrl() {
+        String configured = System.getenv("CONSOLE_BASE_URL");
+        return configured != null ? configured : "http://localhost:8088/console";
+    }
+
+    /**
+     * Last-resort fallback when neither the request nor the App carries a
+     * keyAlias - matches the Dockerfile's baked-in "tsi_corporate_seal" dev
+     * key, so a fresh install can seal-local with zero per-App setup, per
+     * that Dockerfile comment's own stated intent. A deployment that wants
+     * to require every App to configure its own key explicitly (e.g.
+     * production, once the dev keystore has been replaced) can disable
+     * this by setting DEFAULT_KEY_ALIAS to an empty string.
+     */
+    private static String systemDefaultKeyAlias() {
+        String configured = System.getenv("DEFAULT_KEY_ALIAS");
+        if (configured != null) {
+            return configured.isBlank() ? null : configured;
+        }
+        return "tsi_corporate_seal";
     }
 
     @Override
@@ -77,6 +111,12 @@ public class Documents implements Action {
             switch (func) {
                 case "seal_local":
                     sealLocal(req, res, body, appContext);
+                    break;
+                case "initiate_esign":
+                    initiateEsign(req, res, body, appContext);
+                    break;
+                case "get_esign_status":
+                    getEsignStatus(req, res, body, appContext);
                     break;
                 case "upload_document":
                     uploadDocument(req, res, body, appContext);
@@ -147,9 +187,10 @@ public class Documents implements Action {
             return;
         }
         DocumentRepository.DocumentRecord document = documentOpt.get();
-        if (!"DRAFT".equals(document.status()) && !"PENDING".equals(document.status())) {
+        if (!"DRAFT".equals(document.status())) {
             OutputProcessor.errorResponse(res, HttpServletResponse.SC_CONFLICT, "Conflict",
-                    "Document is already " + document.status() + "; cannot seal again.");
+                    "Document is " + document.status() + "; cannot seal again (PENDING means an Aadhaar eSign " +
+                    "session is already in progress - deny or complete it first).");
             return;
         }
         if (!LocalFilesystemStorageProvider.PROVIDER_ID.equals(document.storageProviderId())) {
@@ -161,6 +202,9 @@ public class Documents implements Action {
         String keyAlias = body.path("keyAlias").asText(null);
         if (keyAlias == null) {
             keyAlias = appRepository.findDefaultKeyAlias(appId).orElse(null);
+        }
+        if (keyAlias == null) {
+            keyAlias = systemDefaultKeyAlias();
         }
         if (keyAlias == null) {
             OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request",
@@ -209,6 +253,148 @@ public class Documents implements Action {
         return platformUserRepository.findById(InputProcessor.getUserId(req))
                 .map(PlatformUserRepository.PlatformUserRecord::email)
                 .orElse("App: " + appSlug);
+    }
+
+    /**
+     * Starts an Aadhaar eSign session (prep/TSI-Sign-Aadhaar-eSign-Plan.md):
+     * reserves signature space in the PDF, persists just the bytes/offsets
+     * needed to finish later (never a live PDFBox object - see
+     * ExternalCmsSpliceService), and hands back a gatewayUrl for the
+     * calling App to redirect its own end-user to for OTP/biometric auth.
+     * Only the mock adapter is wired up in this deployment (Phase 1).
+     */
+    private void initiateEsign(HttpServletRequest req, HttpServletResponse res, JsonNode body, AppContext appContext)
+            throws Exception {
+        String documentId = body.path("documentId").asText(null);
+        if (documentId == null) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request", "documentId is required.");
+            return;
+        }
+
+        String appId;
+        String appSlug;
+        if (appContext != null) {
+            appId = appContext.appId();
+            appSlug = appContext.appSlug();
+        } else {
+            appId = body.path("appId").asText(null);
+            if (appId == null) {
+                OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request", "appId is required.");
+                return;
+            }
+            if (!authorizationService.canWrite(InputProcessor.getUserRole(req), InputProcessor.getUserId(req), appId)) {
+                OutputProcessor.errorResponse(res, HttpServletResponse.SC_FORBIDDEN, "Forbidden", "You do not have write access to this App.");
+                return;
+            }
+            Optional<AppRepository.AppRecord> appOpt = appRepository.findById(appId);
+            if (appOpt.isEmpty()) {
+                OutputProcessor.errorResponse(res, HttpServletResponse.SC_NOT_FOUND, "Not Found", "No such App.");
+                return;
+            }
+            appSlug = appOpt.get().appSlug();
+        }
+
+        Optional<DocumentRepository.DocumentRecord> documentOpt = documentRepository.findByIdForApp(appId, documentId);
+        if (documentOpt.isEmpty()) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_NOT_FOUND, "Not Found", "No such document.");
+            return;
+        }
+        DocumentRepository.DocumentRecord document = documentOpt.get();
+        if (!"DRAFT".equals(document.status())) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_CONFLICT, "Conflict",
+                    "Document is " + document.status() + "; cannot initiate eSign (must be DRAFT - PENDING means an eSign session is already in progress).");
+            return;
+        }
+        if (!LocalFilesystemStorageProvider.PROVIDER_ID.equals(document.storageProviderId())) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error",
+                    "Unsupported storage provider for this document: " + document.storageProviderId());
+            return;
+        }
+
+        String signerName = body.path("signerName").asText(null);
+        if (signerName == null || signerName.isBlank()) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request", "signerName is required.");
+            return;
+        }
+        String signerEmail = body.path("signerEmail").asText(null);
+        String signerPhone = body.path("signerPhone").asText(null);
+        String reason = body.path("reason").asText(null);
+
+        StorageObjectRef originalRef = new StorageObjectRef(
+                document.storageProviderId(), document.originalStorageKey(), document.originalHash());
+        byte[] originalBytes = storageProvider.retrieve(originalRef);
+
+        ExternalCmsSpliceService.PreparedSigning prepared = externalCmsSpliceService.prepare(
+                originalBytes, "Aadhaar eSign (Mock ESP)", signerName, reason);
+
+        String signerId = documentSignerRepository.create(documentId, signerName, signerEmail, signerPhone, "AADHAAR_OTP");
+        StorageObjectRef preparedRef = storageProvider.store(appSlug, documentId, "pending-esign", prepared.contentToHash());
+
+        SigningSessionRequest sessionRequest = new SigningSessionRequest(documentId, appId, signerName, signerEmail,
+                signerPhone, HashUtil.sha256Hex(originalBytes), reason);
+        SigningSessionResponse sessionResponse = mockAadhaarEsignAdapter.initiateSigning(sessionRequest);
+
+        esignSessionRepository.create(documentId, signerId, MockAadhaarEsignAdapter.PROVIDER_ID,
+                sessionResponse.transactionId(), preparedRef.storageKey(), prepared.byteRange(),
+                prepared.signatureFieldName(), sessionResponse.gatewayUrl());
+
+        documentRepository.markPending(documentId);
+
+        String actorType = appContext != null ? "APP" : "PLATFORM_USER";
+        String actorId = appContext != null ? appContext.appId() : InputProcessor.getUserId(req);
+        auditLogRepository.log(appId, documentId, "ESIGN_INITIATED", actorType, actorId,
+                req.getRemoteAddr(), req.getHeader("User-Agent"));
+
+        ObjectNode json = MAPPER.createObjectNode();
+        json.put("status", "INITIATED");
+        json.put("transactionId", sessionResponse.transactionId());
+        json.put("gatewayUrl", sessionResponse.gatewayUrl());
+        OutputProcessor.send(res, HttpServletResponse.SC_OK, json);
+    }
+
+    /** Lets the calling App (or the console) poll an in-flight eSign session instead of holding a connection open. */
+    private void getEsignStatus(HttpServletRequest req, HttpServletResponse res, JsonNode body, AppContext appContext)
+            throws Exception {
+        String documentId = body.path("documentId").asText(null);
+        if (documentId == null) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request", "documentId is required.");
+            return;
+        }
+
+        String appId;
+        if (appContext != null) {
+            appId = appContext.appId();
+        } else {
+            appId = body.path("appId").asText(null);
+            if (appId == null) {
+                OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request", "appId is required.");
+                return;
+            }
+            if (!authorizationService.canRead(InputProcessor.getUserRole(req), InputProcessor.getUserId(req), appId)) {
+                OutputProcessor.errorResponse(res, HttpServletResponse.SC_FORBIDDEN, "Forbidden", "You do not have access to this App.");
+                return;
+            }
+        }
+
+        Optional<DocumentRepository.DocumentRecord> documentOpt = documentRepository.findByIdForApp(appId, documentId);
+        if (documentOpt.isEmpty()) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_NOT_FOUND, "Not Found", "No such document.");
+            return;
+        }
+        List<DocumentSignerRepository.DocumentSignerRecord> signers = documentSignerRepository.listForDocument(documentId);
+
+        ObjectNode json = MAPPER.createObjectNode();
+        json.put("documentStatus", documentOpt.get().status());
+        ArrayNode signersArray = json.putArray("signers");
+        for (DocumentSignerRepository.DocumentSignerRecord signer : signers) {
+            ObjectNode node = signersArray.addObject();
+            node.put("signerId", signer.signerId());
+            node.put("signerName", signer.signerName());
+            node.put("signatureType", signer.signatureType());
+            node.put("status", signer.status());
+            node.put("signedAt", signer.signedAt());
+        }
+        OutputProcessor.send(res, HttpServletResponse.SC_OK, json);
     }
 
     /** Raw-file counterpart to Templates.generateDocument: no template, caller supplies the PDF bytes directly. */
@@ -433,6 +619,23 @@ public class Documents implements Action {
             node.put("keyAlias", seal.keyAlias());
             node.put("signatureStandard", seal.signatureStandard());
             node.put("sealedAt", seal.sealedAt());
+        }
+
+        ArrayNode signers = json.putArray("signers");
+        for (DocumentSignerRepository.DocumentSignerRecord signer : documentSignerRepository.listForDocument(documentId)) {
+            ObjectNode node = signers.addObject();
+            node.put("signerId", signer.signerId());
+            node.put("signerName", signer.signerName());
+            node.put("signatureType", signer.signatureType());
+            node.put("status", signer.status());
+            node.put("signedAt", signer.signedAt());
+            if ("PENDING".equals(signer.status())) {
+                Optional<EsignSessionRepository.EsignSessionRecord> activeSession =
+                        esignSessionRepository.findActiveForSigner(signer.signerId());
+                if (activeSession.isPresent()) {
+                    node.put("gatewayUrl", activeSession.get().gatewayUrl());
+                }
+            }
         }
 
         ArrayNode timeline = json.putArray("auditTimeline");

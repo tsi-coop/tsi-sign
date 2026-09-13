@@ -14,7 +14,7 @@ TSI Sign generates documents from HTML templates, routes them for signature (loc
 docker compose up -d
 ```
 
-This starts Postgres and applies the schema via Flyway on app boot. Open **http://localhost:8088/console/** to complete first-run setup (creates the first Platform Admin) and use the admin console - create an App, issue an API key, author a template, and generate/seal/certify documents entirely from the browser.
+On first start against a fresh Postgres volume, the numbered scripts in `db/` run automatically (mounted onto Postgres's own `/docker-entrypoint-initdb.d`, the same mechanism every sibling TSI product uses - no migration-tracking library involved). Open **http://localhost:8088/console/** to complete first-run setup (creates the first Platform Admin) and use the admin console - create an App, issue an API key, author a template, and generate/seal/certify documents entirely from the browser.
 
 ### Environment variables
 
@@ -28,6 +28,7 @@ This starts Postgres and applies the schema via Flyway on app boot. Open **http:
 | `KEYSTORE_PATH` | `/etc/tsi-sign/keystore.p12` | Local PKI KeyStore for `seal_local` (§7); the image bakes in a self-signed dev keypair here |
 | `KEYSTORE_TYPE` | `PKCS12` | KeyStore format |
 | `KEYSTORE_PASSWORD` | `changeit` | KeyStore/key password (**change for anything beyond local evaluation**) |
+| `DEFAULT_KEY_ALIAS` | `tsi_corporate_seal` | Fallback keyAlias for `seal_local` when neither the request nor the App's Signing Defaults specify one - lets a fresh install seal with zero per-App setup. Set to an empty string to require every App to configure its own key explicitly. |
 | `APP_PORT_MAP` | `8088:8080` | Host:container port mapping |
 | `DB_PORT_MAP` | `5440:5432` | PostgreSQL port mapping |
 
@@ -89,14 +90,15 @@ curl -X POST http://localhost:8088/api/v1/templates \
 
 ```
 pom.xml                          Maven build (WAR packaging, Jetty target)
-resources/db/migration/          Flyway schema migrations
+db/                              Numbered schema scripts (01_init.sql, ...), auto-run once by
+                                 Postgres itself against a fresh volume - no migration library
 web/WEB-INF/_processor.tsi       Resource-path -> Action class + auth-mode registry
 src/org/tsicoop/sign/
   framework/                     InterceptingFilter, Action, InputProcessor/OutputProcessor, DB pool, config
   service/v1/                    Tenant-facing Actions (Ping, Templates, Documents)
   service/v1/admin/               Admin console Actions (session-authenticated)
   app/, template/, document/,
-  legal/, pki/, storage/, audit/,
+  legal/, pki/, esign/, storage/, audit/,
   admin/                          Repositories and business logic (HTTP-agnostic)
   seed/                           One-off App-provisioning script (Chunk 1 fallback)
 web/console/                     Admin console (plain HTML/JS, no build step)
