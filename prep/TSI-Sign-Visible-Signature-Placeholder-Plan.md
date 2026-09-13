@@ -1,5 +1,18 @@
 # Corporate Seal — System-Generated Org-Level PAdES Stamp
 
+**Status: implemented.** `SignaturePlaceholderLocator`, `VisibleSignatureStamper`,
+and the updated `LocalPkiSigningService.seal()` are in `src/org/tsicoop/sign/pki/`.
+Verified: signature stays cryptographically valid (`pdfsig` reports "Signature
+is Valid") with the stamp embedded, multi-placeholder stamping works, and a
+template with no marker still seals with today's fully invisible signature
+(regression-checked). One implementation detail worth knowing versus the
+original write-up below: the QR payload uses the **original (pre-seal)
+document hash**, not the final sealed-file hash - the sealed hash isn't known
+yet at the point the stamp is drawn (it's embedded inside the very file whose
+hash it would need to describe), and the original content hash is the more
+meaningful fingerprint anyway (it's what was actually locked in at signing
+time).
+
 ## Use Case Classification
 
 **System-Generated Corporate Seal (Org-Level PAdES Stamp)**

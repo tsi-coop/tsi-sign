@@ -81,7 +81,12 @@
                     <textarea id="template-html" required>&lt;!DOCTYPE html&gt;
 &lt;html&gt;&lt;body&gt;
   &lt;h1&gt;Agreement for {{borrower_name}}&lt;/h1&gt;
+  &lt;p style="margin-top:250px;"&gt;Authorized Signatory:&lt;/p&gt;
+  &lt;span style="color:#ffffff;font-size:1px;"&gt;[[TSI_SIGNATURE]]&lt;/span&gt;
 &lt;/body&gt;&lt;/html&gt;</textarea>
+                    <p class="hint">The [[TSI_SIGNATURE]] marker (kept invisible via the white/1px span above) is where
+                        the Corporate Seal stamp - signer, reason, date, and a QR code - gets drawn when the document
+                        is sealed. Remove it if this template shouldn't carry a visible seal.</p>
                 </div>
                 <div id="template-notice" class="notice error" style="display:none;"></div>
                 <div class="modal-actions">
