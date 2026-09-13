@@ -25,7 +25,6 @@
         <openhtmltopdf.version>1.0.10</openhtmltopdf.version>
         <jmustache.version>1.15</jmustache.version>
         <bouncycastle.version>1.78.1</bouncycastle.version>
-        <zxing.version>3.5.3</zxing.version>
     </properties>
 
     <dependencies>
@@ -101,13 +100,6 @@
             <groupId>org.mindrot</groupId>
             <artifactId>jbcrypt</artifactId>
             <version>0.4</version>
-        </dependency>
-
-        <!-- QR code generation for the visible Corporate Seal stamp (core only - no AWT/Swing helper module needed) -->
-        <dependency>
-            <groupId>com.google.zxing</groupId>
-            <artifactId>core</artifactId>
-            <version>${zxing.version}</version>
         </dependency>
 
         <dependency>

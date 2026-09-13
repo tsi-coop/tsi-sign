@@ -5,13 +5,19 @@ and the updated `LocalPkiSigningService.seal()` are in `src/org/tsicoop/sign/pki
 Verified: signature stays cryptographically valid (`pdfsig` reports "Signature
 is Valid") with the stamp embedded, multi-placeholder stamping works, and a
 template with no marker still seals with today's fully invisible signature
-(regression-checked). One implementation detail worth knowing versus the
-original write-up below: the QR payload uses the **original (pre-seal)
-document hash**, not the final sealed-file hash - the sealed hash isn't known
-yet at the point the stamp is drawn (it's embedded inside the very file whose
-hash it would need to describe), and the original content hash is the more
-meaningful fingerprint anyway (it's what was actually locked in at signing
-time).
+(regression-checked).
+
+**Revised after initial build:** the QR code was removed entirely (dropped
+the `zxing` dependency too) and replaced with a "Signed by" line showing who
+actually triggered the seal - the console user's email (looked up via
+`PlatformUserRepository`) when sealed from the console, or `App: <slug>`
+when sealed via an App's own API key (no individual human is involved in
+that case). This is a different kind of identity from the "By: <keyAlias>"
+line: the key alias is the org-level certificate/seal identity (what the
+cryptographic signature actually attests to); "Signed by" is an audit/
+accountability detail about who clicked seal, layered on top for readers,
+matching the same `actorType`/`actorId` distinction `audit_logs` already
+tracks for every seal event.
 
 ## Use Case Classification
 

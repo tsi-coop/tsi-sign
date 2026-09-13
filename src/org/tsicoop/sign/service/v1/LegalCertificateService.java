@@ -140,8 +140,7 @@ public class LegalCertificateService {
 
         DocumentGenerationResult rendered = generatorService.generatePdf(CERTIFICATE_HTML_TEMPLATE, renderContext);
         LocalPkiSigningService.SealResult sealed = signingService.seal(
-                rendered.pdfBytes(), certifyingKeyAlias, "BSA Section 63(4) Legal Evidence Certificate", null,
-                document.documentId(), document.title());
+                rendered.pdfBytes(), certifyingKeyAlias, "BSA Section 63(4) Legal Evidence Certificate", null, null);
 
         int version = certificateRepository.nextVersion(document.documentId());
         StorageObjectRef ref = storageProvider.store(

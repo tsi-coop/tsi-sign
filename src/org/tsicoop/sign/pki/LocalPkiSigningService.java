@@ -40,10 +40,10 @@ import java.util.Map;
  *
  * <p>If the rendered PDF contains one or more {@code [[TSI_SIGNATURE:name]]}
  * markers (see {@link SignaturePlaceholderLocator}), a visible Corporate
- * Seal stamp (signer/reason/date + QR) is drawn at each one - one becomes
- * the real signature widget ({@link VisibleSignatureStamper}), the rest are
- * plain overlay stamps. Templates with no marker keep today's fully
- * invisible signature, unchanged.
+ * Seal stamp (key alias, who triggered the seal, reason, date) is drawn at
+ * each one - one becomes the real signature widget ({@link
+ * VisibleSignatureStamper}), the rest are plain overlay stamps. Templates
+ * with no marker keep today's fully invisible signature, unchanged.
  */
 public class LocalPkiSigningService {
 
@@ -63,9 +63,8 @@ public class LocalPkiSigningService {
     }
 
     public SealResult seal(byte[] originalPdfBytes, String keyAlias, String reason, String location,
-            String documentId, String documentTitle) throws Exception {
+            String signerIdentity) throws Exception {
         KeyStore.PrivateKeyEntry keyEntry = keyStoreProvider.getPrivateKeyEntry(keyAlias);
-        String originalHash = HashUtil.sha256Hex(originalPdfBytes);
 
         try (PDDocument document = PDDocument.load(originalPdfBytes)) {
             Map<String, SignaturePlaceholderLocator.Placement> placements =
@@ -90,7 +89,7 @@ public class LocalPkiSigningService {
 
             if (!placements.isEmpty()) {
                 stampCorporateSeal(document, signatureOptions, placements, keyAlias, effectiveReason,
-                        signDate, originalHash, documentId, documentTitle);
+                        signDate, signerIdentity);
             }
 
             document.addSignature(signature, signatureInterface, signatureOptions);
@@ -112,28 +111,26 @@ public class LocalPkiSigningService {
      */
     private void stampCorporateSeal(PDDocument document, SignatureOptions signatureOptions,
             Map<String, SignaturePlaceholderLocator.Placement> placements, String keyAlias,
-            String effectiveReason, Calendar signDate, String originalHash,
-            String documentId, String documentTitle) throws Exception {
+            String effectiveReason, Calendar signDate, String signerIdentity) throws Exception {
         SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss z");
         dateFormat.setTimeZone(signDate.getTimeZone());
 
         String signerLine = "By: " + keyAlias;
+        String signedByLine = signerIdentity != null && !signerIdentity.isBlank() ? "Signed by: " + signerIdentity : null;
         String reasonLine = "Reason: " + truncate(effectiveReason, 40);
         String dateLine = "Date: " + dateFormat.format(signDate.getTime());
-        String qrPayload = VisibleSignatureStamper.buildQrPayload(
-                documentTitle, documentId, originalHash, keyAlias, effectiveReason, signDate.toInstant().toString());
 
         String primaryName = placements.keySet().iterator().next();
         for (Map.Entry<String, SignaturePlaceholderLocator.Placement> entry : placements.entrySet()) {
             if (!entry.getKey().equals(primaryName)) {
                 VisibleSignatureStamper.drawOverlayStamp(
-                        document, entry.getValue(), signerLine, reasonLine, dateLine, qrPayload);
+                        document, entry.getValue(), signerLine, signedByLine, reasonLine, dateLine);
             }
         }
 
         SignaturePlaceholderLocator.Placement primary = placements.get(primaryName);
         PDVisibleSigProperties visibleProperties = VisibleSignatureStamper.buildSignatureAppearance(
-                document, primary, "tsi_signature_" + primaryName, signerLine, reasonLine, dateLine, qrPayload);
+                document, primary, "tsi_signature_" + primaryName, signerLine, signedByLine, reasonLine, dateLine);
         signatureOptions.setVisualSignature(visibleProperties);
         signatureOptions.setPage(primary.pageIndex());
     }
