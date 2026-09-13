@@ -140,6 +140,7 @@ button.secondary:hover { border-color: #b2d8d7; color: var(--teal); background: 
 button.danger, .btn.danger { background: var(--red); }
 button.danger:hover { background: #93190f; }
 button:disabled { opacity: .5; cursor: not-allowed; }
+button.small, .btn.small { height: 30px; padding: 0 12px; font-size: 11px; }
 
 .row { display: flex; gap: 20px; flex-wrap: wrap; }
 .row > * { flex: 1; min-width: 240px; }
@@ -158,6 +159,9 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 3px 10px; font-size: 11px; font-weight: 800; white-space: nowrap; }
 .badge.active { background: #eaf7ef; color: var(--green); }
 .badge.inactive { background: #fdeceb; color: var(--red); }
+.badge.neutral { background: #eaf1fb; color: var(--blue); }
+
+.mono { font-family: ui-monospace, monospace; }
 
 .notice { padding: 10px 14px; border-radius: 7px; font-size: 12.5px; font-weight: 600; margin-bottom: 16px; }
 .notice.error { background: #fef2f2; color: var(--red); border: 1px solid #fde8e8; }
@@ -165,6 +169,72 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .notice.key { background: #fff8e1; color: #7a5b00; border: 1px solid #ffe9a8; word-break: break-all; font-family: ui-monospace, monospace; }
 
 .muted { color: var(--muted); }
+
+/* Page header: list-page title + right-aligned "+ New X" action button */
+.page-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.page-head h1 { margin: 0; }
+
+.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+.panel-head h2 { margin: 0; }
+
+/* Modal */
+.modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(23, 32, 51, .45);
+    align-items: center; justify-content: center;
+    padding: 20px;
+    z-index: 100;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+    background: #fff;
+    border-radius: 12px;
+    padding: 26px;
+    width: 100%;
+    max-width: 480px;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+}
+.modal.wide { max-width: 640px; }
+.modal h2 { margin: 0 0 4px; font-size: 18px; }
+.modal .modal-sub { color: var(--muted); font-size: 12.5px; margin: 0 0 18px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+
+.field { margin-bottom: 4px; }
+.hint { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 4px 0 14px; }
+.field-row { display: flex; gap: 10px; align-items: center; }
+.field-row > input { flex: 1; }
+
+.key-box {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    background: var(--wash); border: 1px solid var(--line); border-radius: 7px;
+    padding: 10px 12px; margin: 6px 0 14px;
+    font-family: ui-monospace, monospace; font-size: 12.5px; word-break: break-all;
+}
+
+/* App-onboarding wizard (inside a .modal) */
+.wizard-steps { display: flex; gap: 6px; margin-bottom: 20px; }
+.wizard-steps .step {
+    flex: 1; text-align: center; padding: 8px 4px;
+    border-bottom: 3px solid var(--line);
+    font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--muted);
+}
+.wizard-steps .step.active { border-bottom-color: var(--teal); color: var(--teal); }
+.wizard-steps .step.done { border-bottom-color: #b2d8d7; color: var(--ink); }
+.wizard-panel { display: none; }
+.wizard-panel.active { display: block; }
+
+/* Dashboard stat cards */
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.stat-card {
+    background: #fff; border: 1px solid var(--line); border-radius: 10px;
+    padding: 18px 20px;
+}
+.stat-card .label { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin-bottom: 8px; }
+.stat-card .value { font-size: 28px; font-weight: 900; color: var(--ink); }
+.stat-card.ok .value { color: var(--teal); }
 
 @media (max-width: 980px) {
     .app { grid-template-columns: 1fr; }

@@ -2,24 +2,27 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Certificate Detail — TSI Sign Admin Console</title>
+    <title>Certificate Detail - TSI Sign Admin Console</title>
     <link rel="stylesheet" href="assets/console.css">
 </head>
 <body>
     <header class="mobilebar">
-        <a class="brand" href="apps.html"><span class="mark">TS</span><span>TSI Sign</span></a>
+        <a class="brand" href="dashboard.html"><span class="mark">TS</span><span>TSI Sign</span></a>
     </header>
     <div class="app">
         <aside class="side">
-            <a class="brand" href="apps.html"><span class="mark">TS</span><span>TSI Sign</span></a>
+            <a class="brand" href="dashboard.html"><span class="mark">TS</span><span>TSI Sign</span></a>
             <nav class="nav">
+                <a href="dashboard.html">Dashboard</a>
                 <a href="apps.html">Apps</a>
-                <a href="legal-evidence.html" class="active">Legal Evidence</a>
-                <a href="platform-users.html" class="platform-admin-only">Platform Users</a>
+                <a href="templates.html">Templates</a>
+                <a href="documents.html">Documents</a>
+                <a href="legal-evidence.html" class="active">Legal</a>
+                <a href="users.html" class="platform-admin-only">Users</a>
             </nav>
             <div class="side-foot">
                 <div class="side-user-row">
-                    <div id="sidebar-user-avatar" class="avatar">–</div>
+                    <div id="sidebar-user-avatar" class="avatar">-</div>
                     <div style="min-width:0; flex:1;">
                         <div id="sidebar-user-name" class="side-user-name"></div>
                         <div id="sidebar-user-role" class="side-user-role"></div>
@@ -39,11 +42,11 @@
 
         <div class="row">
             <div>
-                <h2>Part A — System &amp; Operating Status</h2>
+                <h2>Part A: System &amp; Operating Status</h2>
                 <div class="panel"><pre id="part-a" style="white-space:pre-wrap; font-size:12px; margin:0;"></pre></div>
             </div>
             <div>
-                <h2>Part B — Last-Edit Tracking &amp; Output Particulars</h2>
+                <h2>Part B: Last-Edit Tracking &amp; Output Particulars</h2>
                 <div class="panel"><pre id="part-b" style="white-space:pre-wrap; font-size:12px; margin:0;"></pre></div>
             </div>
         </div>
@@ -58,16 +61,16 @@
 
         async function load() {
             const cert = await tsiCall("/api/v1/admin/legal-certificates", "get_certificate", { certificateId });
-            document.getElementById("cert-title").textContent = "Legal Certificate v" + cert.version + " — " + (cert.documentTitle || "");
+            document.getElementById("cert-title").textContent = "Legal Certificate v" + cert.version + " - " + (cert.documentTitle || "");
 
             document.getElementById("summary-panel").innerHTML = `
                 <table>
                     <tr><th>Certificate ID</th><td>${escapeHtml(cert.certificateId)}</td></tr>
                     <tr><th>Version</th><td>${cert.version}</td></tr>
                     <tr><th>Certificate Hash (SHA-256)</th><td style="font-family:ui-monospace,monospace; font-size:12px;">${escapeHtml(cert.certificateHash)}</td></tr>
-                    <tr><th>Linked Document</th><td><a href="document-detail.html?appId=${encodeURIComponent(cert.appId)}&documentId=${encodeURIComponent(cert.documentId)}">${escapeHtml(cert.documentTitle) || "—"}</a> (${escapeHtml(cert.documentStatus) || "—"})</td></tr>
-                    <tr><th>Document Original Hash</th><td style="font-family:ui-monospace,monospace; font-size:12px;">${escapeHtml(cert.documentOriginalHash) || "—"}</td></tr>
-                    <tr><th>Document Sealed Hash</th><td style="font-family:ui-monospace,monospace; font-size:12px;">${escapeHtml(cert.documentSealedHash) || "—"}</td></tr>
+                    <tr><th>Linked Document</th><td><a href="document-detail.html?appId=${encodeURIComponent(cert.appId)}&documentId=${encodeURIComponent(cert.documentId)}">${escapeHtml(cert.documentTitle) || "-"}</a> (${escapeHtml(cert.documentStatus) || "-"})</td></tr>
+                    <tr><th>Document Original Hash</th><td style="font-family:ui-monospace,monospace; font-size:12px;">${escapeHtml(cert.documentOriginalHash) || "-"}</td></tr>
+                    <tr><th>Document Sealed Hash</th><td style="font-family:ui-monospace,monospace; font-size:12px;">${escapeHtml(cert.documentSealedHash) || "-"}</td></tr>
                 </table>
                 <div style="margin-top:16px;">
                     <button id="download-cert-btn">Download Certificate PDF</button>

@@ -12,6 +12,24 @@
 		<welcome-file>index.html</welcome-file>
 	</welcome-file-list>
 
+	<!--
+	  Force revalidation on every static asset request (console HTML/CSS/JS)
+	  instead of Jetty's default heuristic caching off Last-Modified, which
+	  let browsers keep serving a page from before the last redeploy.
+	-->
+	<servlet>
+		<servlet-name>default</servlet-name>
+		<servlet-class>org.eclipse.jetty.ee10.servlet.DefaultServlet</servlet-class>
+		<init-param>
+			<param-name>cacheControl</param-name>
+			<param-value>no-cache</param-value>
+		</init-param>
+	</servlet>
+	<servlet-mapping>
+		<servlet-name>default</servlet-name>
+		<url-pattern>/</url-pattern>
+	</servlet-mapping>
+
 	<listener>
 		<listener-class>org.tsicoop.sign.framework.AppBootstrapListener</listener-class>
 	</listener>

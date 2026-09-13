@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Documents - TSI Sign Admin Console</title>
+    <link rel="stylesheet" href="assets/console.css">
+</head>
+<body>
+    <header class="mobilebar">
+        <a class="brand" href="dashboard.html"><span class="mark">TS</span><span>TSI Sign</span></a>
+    </header>
+    <div class="app">
+        <aside class="side">
+            <a class="brand" href="dashboard.html"><span class="mark">TS</span><span>TSI Sign</span></a>
+            <nav class="nav">
+                <a href="dashboard.html">Dashboard</a>
+                <a href="apps.html">Apps</a>
+                <a href="templates.html">Templates</a>
+                <a href="documents.html" class="active">Documents</a>
+                <a href="legal-evidence.html">Legal</a>
+                <a href="users.html" class="platform-admin-only">Users</a>
+            </nav>
+            <div class="side-foot">
+                <div class="side-user-row">
+                    <div id="sidebar-user-avatar" class="avatar">-</div>
+                    <div style="min-width:0; flex:1;">
+                        <div id="sidebar-user-name" class="side-user-name"></div>
+                        <div id="sidebar-user-role" class="side-user-role"></div>
+                    </div>
+                </div>
+                <a href="#" onclick="logout(); return false;" class="signout">Sign Out</a>
+            </div>
+        </aside>
+
+        <main class="main">
+        <div class="page-head">
+            <div>
+                <h1>Documents</h1>
+                <p class="subtitle">Generated and uploaded documents, scoped to one App at a time.</p>
+            </div>
+            <button id="new-document-btn">+ New Document</button>
+        </div>
+
+        <div id="notice" class="notice error" style="display:none;"></div>
+
+        <div class="panel">
+            <div class="row">
+                <div>
+                    <label>App</label>
+                    <select id="app-select"></select>
+                </div>
+            </div>
+        </div>
+
+        <div id="content" style="display:none;">
+            <div class="panel">
+                <table>
+                    <thead><tr><th>Title</th><th>Template</th><th>Status</th><th>Created</th></tr></thead>
+                    <tbody id="documents-body"><tr><td colspan="4" class="muted">Loading...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="empty-state" class="panel" style="display:none;">
+            <p class="muted">No Apps yet. <a href="apps.html">Create one</a> first.</p>
+        </div>
+        </main>
+    </div>
+
+    <!-- New Document modal -->
+    <div class="modal-overlay" id="create-modal">
+        <div class="modal wide">
+            <h2>New Document</h2>
+            <div class="tabs">
+                <button type="button" class="active" data-doc-tab="generate">Generate from Template</button>
+                <button type="button" data-doc-tab="upload">Upload PDF</button>
+            </div>
+
+            <div class="tab-panel active" id="doc-tab-generate">
+                <form id="generate-document-form">
+                    <div class="field"><label>Template</label><select id="gen-doc-template" required></select></div>
+                    <div class="field"><label>Document title</label><input type="text" id="gen-doc-title" required placeholder="Offer Letter - Jane Doe.pdf"></div>
+                    <div class="field"><label>Payload data (JSON)</label><textarea id="gen-doc-payload">{ }</textarea></div>
+                    <div id="generate-document-notice" class="notice error" style="display:none;"></div>
+                    <div class="modal-actions">
+                        <button type="button" onclick="closeModal('create-modal')">Cancel</button>
+                        <button type="submit">Generate</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="tab-panel" id="doc-tab-upload">
+                <p class="hint">Upload a PDF directly to sign - no template required.</p>
+                <form id="upload-document-form">
+                    <div class="field"><label>Document title</label><input type="text" id="upload-doc-title" required placeholder="Signed Agreement.pdf"></div>
+                    <div class="field"><label>PDF file</label><input type="file" id="upload-doc-file" accept="application/pdf,.pdf" required></div>
+                    <div id="upload-document-notice" class="notice error" style="display:none;"></div>
+                    <div class="modal-actions">
+                        <button type="button" onclick="closeModal('create-modal')">Cancel</button>
+                        <button type="submit">Upload</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="assets/console.js"></script>
+    <script>
+        const notice = document.getElementById("notice");
+        loadTopbar();
+
+        let appId = qs("appId");
+        let templatesCache = [];
+
+        function selectApp(newAppId) {
+            window.location.href = "documents.html?appId=" + encodeURIComponent(newAppId);
+        }
+
+        async function loadTemplatesForSelect() {
+            templatesCache = await tsiCall("/api/v1/templates", "list_templates", { appId });
+            const select = document.getElementById("gen-doc-template");
+            select.innerHTML = templatesCache.length === 0
+                ? '<option value="">Create a template first</option>'
+                : templatesCache.map(t => `<option value="${escapeHtml(t.templateId)}">${escapeHtml(t.templateName)}</option>`).join("");
+        }
+
+        async function loadDocuments() {
+            const documents = await tsiCall("/api/v1/documents", "list_documents", { appId });
+            const body = document.getElementById("documents-body");
+            body.innerHTML = documents.length === 0
+                ? '<tr><td colspan="4" class="muted">No documents yet.</td></tr>'
+                : documents.map(d => `
+                    <tr>
+                        <td><a href="document-detail.html?appId=${encodeURIComponent(appId)}&documentId=${encodeURIComponent(d.documentId)}">${escapeHtml(d.title)}</a></td>
+                        <td>${escapeHtml(d.templateName) || '<span class="muted">-</span>'}</td>
+                        <td><span class="badge ${d.status === "SIGNED" ? "active" : "inactive"}">${escapeHtml(d.status)}</span></td>
+                        <td class="muted">${escapeHtml(d.createdAt)}</td>
+                    </tr>`).join("");
+        }
+
+        document.getElementById("new-document-btn").addEventListener("click", () => {
+            document.getElementById("generate-document-notice").style.display = "none";
+            document.getElementById("upload-document-notice").style.display = "none";
+            openModal("create-modal");
+        });
+
+        document.querySelectorAll("[data-doc-tab]").forEach(btn => {
+            btn.addEventListener("click", () => {
+                document.querySelectorAll("[data-doc-tab]").forEach(b => b.classList.remove("active"));
+                document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+                btn.classList.add("active");
+                document.getElementById("doc-tab-" + btn.dataset.docTab).classList.add("active");
+            });
+        });
+
+        document.getElementById("generate-document-form").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const genNotice = document.getElementById("generate-document-notice");
+            showNotice(genNotice, "");
+            const templateId = document.getElementById("gen-doc-template").value;
+            if (!templateId) {
+                showNotice(genNotice, "Create a template first.");
+                return;
+            }
+            let payloadData;
+            try {
+                payloadData = JSON.parse(document.getElementById("gen-doc-payload").value || "{}");
+            } catch (err) {
+                showNotice(genNotice, "Payload data must be valid JSON.");
+                return;
+            }
+            try {
+                const result = await tsiCall("/api/v1/templates", "generate_document", {
+                    appId, templateId,
+                    documentTitle: document.getElementById("gen-doc-title").value,
+                    payloadData
+                });
+                window.location.href = `document-detail.html?appId=${encodeURIComponent(appId)}&documentId=${encodeURIComponent(result.documentId)}`;
+            } catch (err) {
+                showNotice(genNotice, err.message);
+            }
+        });
+
+        function readFileAsBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result.split(",")[1]);
+                reader.onerror = () => reject(new Error("Could not read file."));
+                reader.readAsDataURL(file);
+            });
+        }
+
+        document.getElementById("upload-document-form").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const uploadNotice = document.getElementById("upload-document-notice");
+            showNotice(uploadNotice, "");
+            const fileInput = document.getElementById("upload-doc-file");
+            const file = fileInput.files[0];
+            if (!file) {
+                showNotice(uploadNotice, "Choose a PDF file first.");
+                return;
+            }
+            try {
+                const fileContentBase64 = await readFileAsBase64(file);
+                const result = await tsiCall("/api/v1/documents", "upload_document", {
+                    appId,
+                    documentTitle: document.getElementById("upload-doc-title").value,
+                    fileContentBase64
+                });
+                window.location.href = `document-detail.html?appId=${encodeURIComponent(appId)}&documentId=${encodeURIComponent(result.documentId)}`;
+            } catch (err) {
+                showNotice(uploadNotice, err.message);
+            }
+        });
+
+        (async function init() {
+            try {
+                const apps = await tsiCall("/api/v1/admin/apps", "list_apps");
+                if (apps.length === 0) {
+                    document.getElementById("empty-state").style.display = "block";
+                    document.getElementById("new-document-btn").disabled = true;
+                    return;
+                }
+                if (!appId || !apps.some(a => a.appId === appId)) {
+                    appId = apps[0].appId;
+                }
+                const select = document.getElementById("app-select");
+                select.innerHTML = apps.map(a => `<option value="${escapeHtml(a.appId)}">${escapeHtml(a.appName)}</option>`).join("");
+                select.value = appId;
+                select.addEventListener("change", () => selectApp(select.value));
+
+                document.getElementById("content").style.display = "block";
+                await Promise.all([loadDocuments(), loadTemplatesForSelect()]);
+            } catch (err) {
+                showNotice(notice, err.message);
+            }
+        })();
+    </script>
+</body>
+</html>

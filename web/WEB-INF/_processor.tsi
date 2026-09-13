@@ -10,6 +10,7 @@
 /api/v1/templates=org.tsicoop.sign.service.v1.Templates|TENANT_OR_CONSOLE
 /api/v1/documents=org.tsicoop.sign.service.v1.Documents|TENANT_OR_CONSOLE
 
+/api/v1/admin/dashboard=org.tsicoop.sign.service.v1.Dashboard|CONSOLE
 /api/v1/admin/setup=org.tsicoop.sign.service.v1.Setup|PUBLIC
 /api/v1/admin/auth=org.tsicoop.sign.service.v1.Auth|PUBLIC
 /api/v1/admin/apps=org.tsicoop.sign.service.v1.Apps|CONSOLE

@@ -2,24 +2,27 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Apps — TSI Sign Admin Console</title>
+    <title>Apps - TSI Sign Admin Console</title>
     <link rel="stylesheet" href="assets/console.css">
 </head>
 <body>
     <header class="mobilebar">
-        <a class="brand" href="apps.html"><span class="mark">TS</span><span>TSI Sign</span></a>
+        <a class="brand" href="dashboard.html"><span class="mark">TS</span><span>TSI Sign</span></a>
     </header>
     <div class="app">
         <aside class="side">
-            <a class="brand" href="apps.html"><span class="mark">TS</span><span>TSI Sign</span></a>
+            <a class="brand" href="dashboard.html"><span class="mark">TS</span><span>TSI Sign</span></a>
             <nav class="nav">
+                <a href="dashboard.html">Dashboard</a>
                 <a href="apps.html" class="active">Apps</a>
-                <a href="legal-evidence.html">Legal Evidence</a>
-                <a href="platform-users.html" class="platform-admin-only">Platform Users</a>
+                <a href="templates.html">Templates</a>
+                <a href="documents.html">Documents</a>
+                <a href="legal-evidence.html">Legal</a>
+                <a href="users.html" class="platform-admin-only">Users</a>
             </nav>
             <div class="side-foot">
                 <div class="side-user-row">
-                    <div id="sidebar-user-avatar" class="avatar">–</div>
+                    <div id="sidebar-user-avatar" class="avatar">-</div>
                     <div style="min-width:0; flex:1;">
                         <div id="sidebar-user-name" class="side-user-name"></div>
                         <div id="sidebar-user-role" class="side-user-role"></div>
@@ -30,46 +33,81 @@
         </aside>
 
         <main class="main">
-        <div class="eyebrow">Admin Console</div>
-        <h1>Apps</h1>
-        <p class="subtitle">Each App is an isolated consumer of the TSI Sign engine — its own API key, template namespace, and signer pool.</p>
+        <div class="page-head">
+            <div>
+                <div class="eyebrow">Admin Console</div>
+                <h1>Apps</h1>
+                <p class="subtitle">Each App is an isolated consumer of the TSI Sign engine - its own API key, template namespace, and signer pool.</p>
+            </div>
+            <button id="new-app-btn" class="platform-admin-only">+ New App</button>
+        </div>
 
         <div class="panel">
             <div id="notice" class="notice error" style="display:none;"></div>
             <table>
                 <thead><tr><th>Name</th><th>Slug</th><th>Status</th><th>Default Provider</th><th>Created</th></tr></thead>
-                <tbody id="apps-body"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
+                <tbody id="apps-body"><tr><td colspan="5" class="muted">Loading...</td></tr></tbody>
             </table>
         </div>
-
-        <h2 class="platform-admin-only">Create App</h2>
-        <div class="panel platform-admin-only">
-            <form id="create-form">
-                <div class="row">
-                    <div>
-                        <label>App name</label>
-                        <input type="text" id="app-name" required placeholder="Loan App">
-                    </div>
-                    <div>
-                        <label>App slug (unique, lowercase, e.g. loan-app)</label>
-                        <input type="text" id="app-slug" required placeholder="loan-app" pattern="[a-z0-9\-]+">
-                    </div>
-                </div>
-                <div class="row">
-                    <div>
-                        <label>Default provider ID (optional)</label>
-                        <input type="text" id="app-provider" placeholder="local_pki">
-                    </div>
-                    <div>
-                        <label>Default key alias (optional)</label>
-                        <input type="text" id="app-key-alias" placeholder="tsi_corporate_seal">
-                    </div>
-                </div>
-                <div style="margin-top:16px;"><button type="submit">Create App</button></div>
-            </form>
-            <div id="new-key-notice" class="notice key" style="display:none;"></div>
-        </div>
         </main>
+    </div>
+
+    <!-- New App onboarding wizard -->
+    <div class="modal-overlay" id="wizard-modal">
+        <div class="modal">
+            <h2>New App</h2>
+            <p class="modal-sub">Set up the App, its signing defaults, and its first API key in one go.</p>
+
+            <div class="wizard-steps">
+                <div class="step active" data-step="1">1. App Details</div>
+                <div class="step" data-step="2">2. Signing Defaults</div>
+                <div class="step" data-step="3">3. Review &amp; Create</div>
+            </div>
+
+            <div id="wizard-error" class="notice error" style="display:none;"></div>
+
+            <div class="wizard-panel active" data-step="1">
+                <div class="field"><label>App name</label><input type="text" id="wiz-name" placeholder="Loan App"></div>
+                <div class="field"><label>App slug (unique, lowercase)</label><input type="text" id="wiz-slug" placeholder="loan-app" pattern="[a-z0-9\-]+"></div>
+                <div class="modal-actions">
+                    <button type="button" onclick="closeModal('wizard-modal')">Cancel</button>
+                    <button type="button" class="primary" onclick="wizardNext(1)">Next</button>
+                </div>
+            </div>
+
+            <div class="wizard-panel" data-step="2">
+                <div class="field"><label>Default provider ID (optional)</label><input type="text" id="wiz-provider" placeholder="local_pki"></div>
+                <div class="field"><label>Default key alias (optional)</label><input type="text" id="wiz-key-alias" placeholder="tsi_corporate_seal"></div>
+                <p class="hint">Used when a seal/sign request doesn't specify a keyAlias itself. The Dockerfile bakes in a
+                    ready-to-use dev key under alias "tsi_corporate_seal" - you can change this any time later from
+                    the App's Signing Defaults tab.</p>
+                <div class="modal-actions">
+                    <button type="button" onclick="wizardBack(2)">Back</button>
+                    <button type="button" class="primary" onclick="wizardNext(2)">Next</button>
+                </div>
+            </div>
+
+            <div class="wizard-panel" data-step="3">
+                <div id="wizard-review"></div>
+                <div class="modal-actions">
+                    <button type="button" onclick="wizardBack(3)">Back</button>
+                    <button type="button" class="primary" id="wizard-create-btn">Create App</button>
+                </div>
+            </div>
+
+            <div class="wizard-panel" data-step="done">
+                <p>App created. Here is its API key - store it now, it cannot be retrieved again.</p>
+                <label>API Key</label>
+                <div class="key-box">
+                    <span id="wizard-api-key" style="overflow:hidden;text-overflow:ellipsis"></span>
+                    <button class="small" onclick="copyText(document.getElementById('wizard-api-key').textContent, this)">Copy</button>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" onclick="closeModal('wizard-modal')">Done</button>
+                    <button type="button" class="primary" id="wizard-goto-app-btn">Go to App</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="assets/console.js"></script>
@@ -81,41 +119,97 @@
             try {
                 const apps = await tsiCall("/api/v1/admin/apps", "list_apps");
                 const body = document.getElementById("apps-body");
-                if (apps.length === 0) {
-                    body.innerHTML = '<tr><td colspan="5" class="muted">No Apps yet — create one below.</td></tr>';
-                    return;
-                }
-                body.innerHTML = apps.map(a => `
-                    <tr>
-                        <td><a href="app-detail.html?appId=${encodeURIComponent(a.appId)}">${escapeHtml(a.appName)}</a></td>
-                        <td>${escapeHtml(a.appSlug)}</td>
-                        <td><span class="badge ${a.isActive ? "active" : "inactive"}">${a.isActive ? "Active" : "Inactive"}</span></td>
-                        <td>${escapeHtml(a.defaultProviderId) || '<span class="muted">—</span>'}</td>
-                        <td class="muted">${escapeHtml(a.createdAt)}</td>
-                    </tr>
-                `).join("");
+                body.innerHTML = apps.length === 0
+                    ? '<tr><td colspan="5" class="muted">No Apps yet.</td></tr>'
+                    : apps.map(a => `
+                        <tr>
+                            <td><a href="app-detail.html?appId=${encodeURIComponent(a.appId)}">${escapeHtml(a.appName)}</a></td>
+                            <td>${escapeHtml(a.appSlug)}</td>
+                            <td><span class="badge ${a.isActive ? "active" : "inactive"}">${a.isActive ? "Active" : "Inactive"}</span></td>
+                            <td>${escapeHtml(a.defaultProviderId) || '<span class="muted">-</span>'}</td>
+                            <td class="muted">${escapeHtml(a.createdAt)}</td>
+                        </tr>
+                    `).join("");
             } catch (err) {
                 showNotice(notice, err.message);
             }
         }
 
-        document.getElementById("create-form").addEventListener("submit", async (e) => {
-            e.preventDefault();
-            showNotice(notice, "");
+        /* ---------- New App wizard ---------- */
+
+        let wizardCreatedAppId = null;
+
+        function wizardShowStep(step) {
+            document.querySelectorAll(".wizard-steps .step").forEach(el => {
+                const s = Number(el.dataset.step);
+                el.classList.toggle("active", s === step);
+                el.classList.toggle("done", s < step);
+            });
+            document.querySelectorAll(".wizard-panel").forEach(el => {
+                el.classList.toggle("active", el.dataset.step === String(step));
+            });
+        }
+
+        function wizardNext(fromStep) {
+            document.getElementById("wizard-error").style.display = "none";
+            if (fromStep === 1) {
+                const name = document.getElementById("wiz-name").value.trim();
+                const slug = document.getElementById("wiz-slug").value.trim();
+                if (!name || !slug) {
+                    showNotice(document.getElementById("wizard-error"), "App name and slug are required.");
+                    return;
+                }
+                wizardShowStep(2);
+            } else if (fromStep === 2) {
+                document.getElementById("wizard-review").innerHTML = `
+                    <table>
+                        <tr><th>App name</th><td>${escapeHtml(document.getElementById("wiz-name").value)}</td></tr>
+                        <tr><th>Slug</th><td>${escapeHtml(document.getElementById("wiz-slug").value)}</td></tr>
+                        <tr><th>Default provider</th><td>${escapeHtml(document.getElementById("wiz-provider").value) || '<span class="muted">-</span>'}</td></tr>
+                        <tr><th>Default key alias</th><td>${escapeHtml(document.getElementById("wiz-key-alias").value) || '<span class="muted">-</span>'}</td></tr>
+                    </table>`;
+                wizardShowStep(3);
+            }
+        }
+
+        function wizardBack(fromStep) {
+            document.getElementById("wizard-error").style.display = "none";
+            wizardShowStep(fromStep - 1);
+        }
+
+        function resetWizard() {
+            document.getElementById("wiz-name").value = "";
+            document.getElementById("wiz-slug").value = "";
+            document.getElementById("wiz-provider").value = "";
+            document.getElementById("wiz-key-alias").value = "";
+            document.getElementById("wizard-error").style.display = "none";
+            wizardCreatedAppId = null;
+            wizardShowStep(1);
+        }
+
+        document.getElementById("new-app-btn").addEventListener("click", () => {
+            resetWizard();
+            openModal("wizard-modal");
+        });
+
+        document.getElementById("wizard-create-btn").addEventListener("click", async () => {
+            const wizardError = document.getElementById("wizard-error");
             try {
                 const result = await tsiCall("/api/v1/admin/apps", "create_app", {
-                    appName: document.getElementById("app-name").value,
-                    appSlug: document.getElementById("app-slug").value,
-                    defaultProviderId: document.getElementById("app-provider").value || null,
-                    defaultKeyAlias: document.getElementById("app-key-alias").value || null
+                    appName: document.getElementById("wiz-name").value.trim(),
+                    appSlug: document.getElementById("wiz-slug").value.trim(),
+                    defaultProviderId: document.getElementById("wiz-provider").value.trim() || null,
+                    defaultKeyAlias: document.getElementById("wiz-key-alias").value.trim() || null
                 });
-                const keyNotice = document.getElementById("new-key-notice");
-                keyNotice.style.display = "block";
-                keyNotice.textContent = "App created. API key (shown once): " + result.apiKey;
-                document.getElementById("create-form").reset();
+                wizardCreatedAppId = result.appId;
+                document.getElementById("wizard-api-key").textContent = result.apiKey;
+                document.getElementById("wizard-goto-app-btn").onclick = () => {
+                    window.location.href = "app-detail.html?appId=" + encodeURIComponent(wizardCreatedAppId);
+                };
+                wizardShowStep("done");
                 loadApps();
             } catch (err) {
-                showNotice(notice, err.message);
+                showNotice(wizardError, err.message);
             }
         });
 

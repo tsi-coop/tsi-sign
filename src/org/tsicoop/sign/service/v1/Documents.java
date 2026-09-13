@@ -17,16 +17,24 @@ import org.tsicoop.sign.storage.LocalFilesystemStorageProvider;
 import org.tsicoop.sign.storage.StorageObjectRef;
 
 import java.time.Instant;
+import java.util.Base64;
 import java.util.Optional;
+import java.util.UUID;
+
+import org.tsicoop.sign.framework.HashUtil;
 
 /**
  * TENANT_OR_CONSOLE (matches tsi-ledger's Accounts.java): an App and the
  * admin console both touch documents/legal certificates, so this is one
  * Action branching on which identity resolved. funcs:
- *  - seal_local, get_legal_certificate: TENANT only (§7, §9.4).
- *  - generate_legal_certificate: BOTH — the real duplication this merge
- *    fixes (PKI signing + Part A/B assembly is not cheap logic to keep in
- *    sync across two classes).
+ *  - get_legal_certificate: TENANT only (§9.4).
+ *  - seal_local, generate_legal_certificate, upload_document: BOTH — tenant
+ *    acts under its own App; console acts under a body-supplied appId
+ *    (RBAC-checked, §10.9). generate_legal_certificate is the real
+ *    duplication this merge fixes (PKI signing + Part A/B assembly is not
+ *    cheap logic to keep in sync across two classes). upload_document is
+ *    the raw-file counterpart to Templates.generate_document — same DRAFT
+ *    document row, just with a null template_id and caller-supplied bytes.
  *  - list_documents, get_document, download_document: CONSOLE only (§10.4).
  *    A bare API-key caller has no role, so AuthorizationService naturally
  *    403s these rather than needing a separate guard.
@@ -67,12 +75,10 @@ public class Documents implements Action {
         try {
             switch (func) {
                 case "seal_local":
-                    if (appContext == null) {
-                        OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request",
-                                "This operation requires an App API key.");
-                        return;
-                    }
                     sealLocal(req, res, body, appContext);
+                    break;
+                case "upload_document":
+                    uploadDocument(req, res, body, appContext);
                     break;
                 case "get_legal_certificate":
                     if (appContext == null) {
@@ -109,8 +115,32 @@ public class Documents implements Action {
             OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request", "documentId is required.");
             return;
         }
+
+        String appId;
+        String appSlug;
+        if (appContext != null) {
+            appId = appContext.appId();
+            appSlug = appContext.appSlug();
+        } else {
+            appId = body.path("appId").asText(null);
+            if (appId == null) {
+                OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request", "appId is required.");
+                return;
+            }
+            if (!authorizationService.canWrite(InputProcessor.getUserRole(req), InputProcessor.getUserId(req), appId)) {
+                OutputProcessor.errorResponse(res, HttpServletResponse.SC_FORBIDDEN, "Forbidden", "You do not have write access to this App.");
+                return;
+            }
+            Optional<AppRepository.AppRecord> appOpt = appRepository.findById(appId);
+            if (appOpt.isEmpty()) {
+                OutputProcessor.errorResponse(res, HttpServletResponse.SC_NOT_FOUND, "Not Found", "No such App.");
+                return;
+            }
+            appSlug = appOpt.get().appSlug();
+        }
+
         Optional<DocumentRepository.DocumentRecord> documentOpt =
-                documentRepository.findByIdForApp(appContext.appId(), documentId);
+                documentRepository.findByIdForApp(appId, documentId);
         if (documentOpt.isEmpty()) {
             OutputProcessor.errorResponse(res, HttpServletResponse.SC_NOT_FOUND, "Not Found", "No such document.");
             return;
@@ -129,7 +159,7 @@ public class Documents implements Action {
 
         String keyAlias = body.path("keyAlias").asText(null);
         if (keyAlias == null) {
-            keyAlias = appRepository.findDefaultKeyAlias(appContext.appId()).orElse(null);
+            keyAlias = appRepository.findDefaultKeyAlias(appId).orElse(null);
         }
         if (keyAlias == null) {
             OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request",
@@ -145,11 +175,14 @@ public class Documents implements Action {
 
         LocalPkiSigningService.SealResult sealed = signingService.seal(originalBytes, keyAlias, reason, location);
 
-        StorageObjectRef sealedRef = storageProvider.store(appContext.appSlug(), documentId, "sealed", sealed.sealedPdfBytes());
+        StorageObjectRef sealedRef = storageProvider.store(appSlug, documentId, "sealed", sealed.sealedPdfBytes());
 
         documentRepository.markSealed(documentId, sealedRef.storageKey(), sealed.sha256Hash());
         documentRepository.insertSeal(documentId, null, "local_pki", keyAlias, null, null, "PAdES-B-B", null, null);
-        auditLogRepository.log(appContext.appId(), documentId, "SEALED", "APP", appContext.appId(),
+
+        String actorType = appContext != null ? "APP" : "PLATFORM_USER";
+        String actorId = appContext != null ? appContext.appId() : InputProcessor.getUserId(req);
+        auditLogRepository.log(appId, documentId, "SEALED", actorType, actorId,
                 req.getRemoteAddr(), req.getHeader("User-Agent"));
 
         ObjectNode json = MAPPER.createObjectNode();
@@ -158,6 +191,68 @@ public class Documents implements Action {
         json.put("sealedAt", Instant.now().toString());
         json.put("sha256Checksum", sealed.sha256Hash());
         OutputProcessor.send(res, HttpServletResponse.SC_OK, json);
+    }
+
+    /** Raw-file counterpart to Templates.generateDocument: no template, caller supplies the PDF bytes directly. */
+    private void uploadDocument(HttpServletRequest req, HttpServletResponse res, JsonNode body, AppContext appContext)
+            throws Exception {
+        String documentTitle = body.path("documentTitle").asText(null);
+        String fileContentBase64 = body.path("fileContentBase64").asText(null);
+        if (documentTitle == null || fileContentBase64 == null) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request",
+                    "documentTitle and fileContentBase64 are required.");
+            return;
+        }
+
+        String appId;
+        String appSlug;
+        if (appContext != null) {
+            appId = appContext.appId();
+            appSlug = appContext.appSlug();
+        } else {
+            appId = body.path("appId").asText(null);
+            if (appId == null) {
+                OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request", "appId is required.");
+                return;
+            }
+            if (!authorizationService.canWrite(InputProcessor.getUserRole(req), InputProcessor.getUserId(req), appId)) {
+                OutputProcessor.errorResponse(res, HttpServletResponse.SC_FORBIDDEN, "Forbidden", "You do not have write access to this App.");
+                return;
+            }
+            Optional<AppRepository.AppRecord> appOpt = appRepository.findById(appId);
+            if (appOpt.isEmpty()) {
+                OutputProcessor.errorResponse(res, HttpServletResponse.SC_NOT_FOUND, "Not Found", "No such App.");
+                return;
+            }
+            appSlug = appOpt.get().appSlug();
+        }
+
+        byte[] fileBytes;
+        try {
+            fileBytes = Base64.getDecoder().decode(fileContentBase64);
+        } catch (IllegalArgumentException e) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request", "fileContentBase64 is not valid base64.");
+            return;
+        }
+
+        String documentId = UUID.randomUUID().toString();
+        StorageObjectRef ref = storageProvider.store(appSlug, documentId, "original", fileBytes);
+        String originalHash = HashUtil.sha256Hex(fileBytes);
+
+        documentRepository.createDraftWithId(documentId, appId, null, documentTitle,
+                ref.providerId(), ref.storageKey(), originalHash);
+
+        String uploadActorType = appContext != null ? "APP" : "PLATFORM_USER";
+        String uploadActorId = appContext != null ? appContext.appId() : InputProcessor.getUserId(req);
+        auditLogRepository.log(appId, documentId, "DOCUMENT_UPLOADED", uploadActorType, uploadActorId,
+                req.getRemoteAddr(), req.getHeader("User-Agent"));
+
+        ObjectNode json = MAPPER.createObjectNode();
+        json.put("documentId", documentId);
+        json.put("status", "DRAFT");
+        json.put("originalHashSha256", originalHash);
+        json.put("storageKey", ref.storageKey());
+        OutputProcessor.send(res, HttpServletResponse.SC_CREATED, json);
     }
 
     /** §9.4 GET — retrieves the latest sealed certificate PDF. TENANT only. */
