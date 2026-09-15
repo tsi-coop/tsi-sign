@@ -15,7 +15,7 @@ public class AppRepository {
     public record AppRecord(
             String appId, String appName, String appSlug, boolean isActive,
             String defaultProviderId, String defaultKeyAlias, String webhookUrl, Integer rateLimitRpm,
-            String createdAt
+            String storageProviderId, String createdAt
     ) {
     }
 
@@ -74,7 +74,7 @@ public class AppRepository {
         try {
             con = pool.getConnection();
             ps = con.prepareStatement("SELECT app_id, app_name, app_slug, is_active, default_provider_id, " +
-                    "default_key_alias, webhook_url, rate_limit_rpm, created_at::text AS created_at " +
+                    "default_key_alias, webhook_url, rate_limit_rpm, storage_provider_id, created_at::text AS created_at " +
                     "FROM apps ORDER BY created_at DESC");
             rs = ps.executeQuery();
             List<AppRecord> apps = new ArrayList<>();
@@ -96,7 +96,7 @@ public class AppRepository {
             pool = new PoolDB();
             con = pool.getConnection();
             ps = con.prepareStatement("SELECT app_id, app_name, app_slug, is_active, default_provider_id, " +
-                    "default_key_alias, webhook_url, rate_limit_rpm, created_at::text AS created_at " +
+                    "default_key_alias, webhook_url, rate_limit_rpm, storage_provider_id, created_at::text AS created_at " +
                     "FROM apps WHERE app_id = ?::uuid");
             ps.setString(1, appId);
             rs = ps.executeQuery();
@@ -131,6 +131,27 @@ public class AppRepository {
         }
     }
 
+    /**
+     * Chunk 12, §5.2: per-App storage backend override. NULL = fall back to
+     * the deployment-wide DEFAULT_STORAGE_PROVIDER_ID (see
+     * StorageProviderRegistry) - e.g. Loan App pinned to privacy_vault while
+     * everything else uses the deployment default.
+     */
+    public void updateStorageProvider(String appId, String storageProviderId) throws Exception {
+        Connection con = null;
+        PreparedStatement ps = null;
+        PoolDB pool = new PoolDB();
+        try {
+            con = pool.getConnection();
+            ps = con.prepareStatement("UPDATE apps SET storage_provider_id = ?, updated_at = now() WHERE app_id = ?::uuid");
+            ps.setString(1, storageProviderId);
+            ps.setString(2, appId);
+            ps.executeUpdate();
+        } finally {
+            pool.cleanup(null, ps, con);
+        }
+    }
+
     /** §10.2 Overview tab, §9 Chunk 9: editable rate_limit_rpm (null = unlimited). */
     public void updateRateLimit(String appId, Integer rateLimitRpm) throws Exception {
         Connection con = null;
@@ -158,6 +179,6 @@ public class AppRepository {
                 rs.getString("app_id"), rs.getString("app_name"), rs.getString("app_slug"),
                 rs.getBoolean("is_active"), rs.getString("default_provider_id"),
                 rs.getString("default_key_alias"), rs.getString("webhook_url"), rateLimitRpm,
-                rs.getString("created_at"));
+                rs.getString("storage_provider_id"), rs.getString("created_at"));
     }
 }

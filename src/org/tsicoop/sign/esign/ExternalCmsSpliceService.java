@@ -58,6 +58,20 @@ public class ExternalCmsSpliceService {
      */
     public PreparedSigning prepare(byte[] originalPdfBytes, String providerLabel, String signerName, String reason)
             throws Exception {
+        return prepare(originalPdfBytes, providerLabel, signerName, reason, null);
+    }
+
+    /**
+     * @param targetPlaceholderName null: every located marker gets stamped -
+     *                              first becomes the real widget, the rest
+     *                              plain overlay stamps (today's behavior).
+     *                              Non-null (prep/TSI-Sign-Multi-Signature-Documents-Plan.md):
+     *                              only that one named marker becomes the
+     *                              real widget; every other marker is left
+     *                              completely untouched for a later signer.
+     */
+    public PreparedSigning prepare(byte[] originalPdfBytes, String providerLabel, String signerName, String reason,
+            String targetPlaceholderName) throws Exception {
         try (PDDocument document = PDDocument.load(originalPdfBytes)) {
             Map<String, SignaturePlaceholderLocator.Placement> placements =
                     SignaturePlaceholderLocator.locate(document);
@@ -85,11 +99,15 @@ public class ExternalCmsSpliceService {
                 String reasonLine = "Reason: " + truncate(effectiveReason, 40);
                 String dateLine = "Date: " + dateFormat.format(signDate.getTime());
 
-                String primaryName = placements.keySet().iterator().next();
-                for (Map.Entry<String, SignaturePlaceholderLocator.Placement> entry : placements.entrySet()) {
-                    if (!entry.getKey().equals(primaryName)) {
-                        VisibleSignatureStamper.drawOverlayStamp(
-                                document, entry.getValue(), signerLine, signedByLine, reasonLine, dateLine);
+                boolean targeted = targetPlaceholderName != null && placements.containsKey(targetPlaceholderName);
+                String primaryName = targeted ? targetPlaceholderName : placements.keySet().iterator().next();
+
+                if (!targeted) {
+                    for (Map.Entry<String, SignaturePlaceholderLocator.Placement> entry : placements.entrySet()) {
+                        if (!entry.getKey().equals(primaryName)) {
+                            VisibleSignatureStamper.drawOverlayStamp(
+                                    document, entry.getValue(), signerLine, signedByLine, reasonLine, dateLine);
+                        }
                     }
                 }
 

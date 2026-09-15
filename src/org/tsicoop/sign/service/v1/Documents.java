@@ -17,13 +17,17 @@ import org.tsicoop.sign.esign.SigningSessionRequest;
 import org.tsicoop.sign.esign.SigningSessionResponse;
 import org.tsicoop.sign.pki.LocalKeyStoreProvider;
 import org.tsicoop.sign.pki.LocalPkiSigningService;
+import org.tsicoop.sign.pki.SignaturePlaceholderLocator;
 import org.tsicoop.sign.storage.DocumentStorageProvider;
-import org.tsicoop.sign.storage.LocalFilesystemStorageProvider;
+import org.tsicoop.sign.storage.StorageException;
 import org.tsicoop.sign.storage.StorageObjectRef;
+import org.tsicoop.sign.storage.StorageProviderRegistry;
+import org.apache.pdfbox.pdmodel.PDDocument;
 
 import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -55,7 +59,6 @@ public class Documents implements Action {
     private final AuditLogRepository auditLogRepository = new AuditLogRepository();
     private final PlatformUserRepository platformUserRepository = new PlatformUserRepository();
     private final LegalCertificateRepository legalCertificateRepository = new LegalCertificateRepository();
-    private final DocumentStorageProvider storageProvider = new LocalFilesystemStorageProvider();
     private final AuthorizationService authorizationService = new AuthorizationService();
     private final LocalPkiSigningService signingService;
     private final LegalCertificateService legalCertificateService;
@@ -70,7 +73,7 @@ public class Documents implements Action {
         } catch (Exception e) {
             throw new RuntimeException("Failed to initialize Local PKI signing service", e);
         }
-        legalCertificateService = new LegalCertificateService(signingService, storageProvider);
+        legalCertificateService = new LegalCertificateService(signingService);
     }
 
     /** Base URL the mock ESP's gatewayUrl is built against - overridable for non-default deployments. */
@@ -187,13 +190,39 @@ public class Documents implements Action {
             return;
         }
         DocumentRepository.DocumentRecord document = documentOpt.get();
-        if (!"DRAFT".equals(document.status())) {
+        if (!"DRAFT".equals(document.status()) && !"PARTIALLY_SIGNED".equals(document.status())) {
             OutputProcessor.errorResponse(res, HttpServletResponse.SC_CONFLICT, "Conflict",
-                    "Document is " + document.status() + "; cannot seal again (PENDING means an Aadhaar eSign " +
-                    "session is already in progress - deny or complete it first).");
+                    "Document is " + document.status() + "; cannot seal (must be DRAFT or PARTIALLY_SIGNED - " +
+                    "PENDING means an Aadhaar eSign session is already in progress - deny or complete it first).");
             return;
         }
-        if (!LocalFilesystemStorageProvider.PROVIDER_ID.equals(document.storageProviderId())) {
+
+        String signerName = body.path("signerName").asText(null);
+        if ("PARTIALLY_SIGNED".equals(document.status()) && (signerName == null || signerName.isBlank())) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request",
+                    "signerName is required once a document is PARTIALLY_SIGNED - target the specific signer whose turn it is.");
+            return;
+        }
+        if (signerName != null) {
+            Optional<DocumentSignerRepository.DocumentSignerRecord> existing =
+                    documentSignerRepository.findByAnchor(documentId, signerName);
+            if (existing.isPresent() && "SIGNED".equals(existing.get().status())) {
+                OutputProcessor.errorResponse(res, HttpServletResponse.SC_CONFLICT, "Conflict",
+                        "Signer '" + signerName + "' has already signed this document.");
+                return;
+            }
+        }
+        if (esignSessionRepository.findActiveForDocument(documentId).isPresent()) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_CONFLICT, "Conflict",
+                    "Another signer's Aadhaar eSign session is currently in progress on this document - " +
+                    "complete or deny it first.");
+            return;
+        }
+
+        DocumentStorageProvider storageProvider;
+        try {
+            storageProvider = StorageProviderRegistry.resolve(document.storageProviderId());
+        } catch (StorageException e) {
             OutputProcessor.errorResponse(res, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error",
                     "Unsupported storage provider for this document: " + document.storageProviderId());
             return;
@@ -214,18 +243,37 @@ public class Documents implements Action {
         String reason = body.path("reason").asText(null);
         String location = body.path("location").asText(null);
 
-        StorageObjectRef originalRef = new StorageObjectRef(
-                document.storageProviderId(), document.originalStorageKey(), document.originalHash());
-        byte[] originalBytes = storageProvider.retrieve(originalRef);
+        StorageObjectRef currentRef = currentVariantRef(document);
+        byte[] currentBytes = storageProvider.retrieve(currentRef);
+
+        String signerId;
+        try {
+            signerId = resolveSignerRow(documentId, currentBytes, signerName, "LOCAL_PKI", null, null);
+        } catch (IllegalArgumentException e) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request", e.getMessage());
+            return;
+        }
 
         String signerIdentity = resolveSignerIdentity(req, appContext, appSlug);
         LocalPkiSigningService.SealResult sealed = signingService.seal(
-                originalBytes, keyAlias, reason, location, signerIdentity);
+                currentBytes, keyAlias, reason, location, signerIdentity, signerName);
 
         StorageObjectRef sealedRef = storageProvider.store(appSlug, documentId, "sealed", sealed.sealedPdfBytes());
 
-        documentRepository.markSealed(documentId, sealedRef.storageKey(), sealed.sha256Hash());
-        documentRepository.insertSeal(documentId, null, "local_pki", keyAlias, null, null, "PAdES-B-B", null, null);
+        String newStatus = "SIGNED";
+        if (signerId != null) {
+            documentSignerRepository.markStatus(signerId, "SIGNED");
+            newStatus = anyOtherSignerPending(documentId) ? "PARTIALLY_SIGNED" : "SIGNED";
+        }
+
+        boolean updated = documentRepository.markSealedIfHashMatches(
+                documentId, sealedRef.storageKey(), sealed.sha256Hash(), document.sealedHash(), newStatus);
+        if (!updated) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_CONFLICT, "Conflict",
+                    "Another signature was just applied to this document - retry against the current version.");
+            return;
+        }
+        documentRepository.insertSeal(documentId, signerId, "local_pki", keyAlias, null, null, "PAdES-B-B", null, null);
 
         String actorType = appContext != null ? "APP" : "PLATFORM_USER";
         String actorId = appContext != null ? appContext.appId() : InputProcessor.getUserId(req);
@@ -233,11 +281,70 @@ public class Documents implements Action {
                 req.getRemoteAddr(), req.getHeader("User-Agent"));
 
         ObjectNode json = MAPPER.createObjectNode();
-        json.put("status", "SIGNED");
+        json.put("status", newStatus);
         json.put("signatureStandard", "PAdES-B-B");
         json.put("sealedAt", Instant.now().toString());
         json.put("sha256Checksum", sealed.sha256Hash());
         OutputProcessor.send(res, HttpServletResponse.SC_OK, json);
+    }
+
+    /** sealedStorageKey if the document was already partially sealed, else the original render - "latest bytes". */
+    private StorageObjectRef currentVariantRef(DocumentRepository.DocumentRecord document) {
+        return document.sealedStorageKey() != null
+                ? new StorageObjectRef(document.storageProviderId(), document.sealedStorageKey(), document.sealedHash())
+                : new StorageObjectRef(document.storageProviderId(), document.originalStorageKey(), document.originalHash());
+    }
+
+    /**
+     * Multi-signature documents (prep/TSI-Sign-Multi-Signature-Documents-Plan.md):
+     * resolves the document_signers row for signerName, opportunistically
+     * registering a PENDING placeholder row for every *other* still-blank
+     * [[TSI_SIGNATURE:name]] marker found in the current bytes, so later
+     * signers' turns and the PARTIALLY_SIGNED/SIGNED transition can be
+     * tracked without needing the full signer set known up front.
+     *
+     * @return null when signerName is null (legacy "stamp everything in one
+     *         shot" path - no per-signer bookkeeping at all); the resolved
+     *         signerId otherwise.
+     * @throws IllegalArgumentException if signerName doesn't match any
+     *         marker in a document that does have markers.
+     */
+    private String resolveSignerRow(String documentId, byte[] currentBytes, String signerName, String signatureType,
+                                     String signerEmail, String signerPhone) throws Exception {
+        if (signerName == null) {
+            return null;
+        }
+        Map<String, SignaturePlaceholderLocator.Placement> markers;
+        try (PDDocument doc = PDDocument.load(currentBytes)) {
+            markers = SignaturePlaceholderLocator.locate(doc);
+        }
+        if (markers.isEmpty()) {
+            return documentSignerRepository.create(documentId, signerName, signerEmail, signerPhone, signatureType, null);
+        }
+        if (!markers.containsKey(signerName)) {
+            throw new IllegalArgumentException("No [[TSI_SIGNATURE:" + signerName + "]] marker found in this document.");
+        }
+        for (String otherName : markers.keySet()) {
+            if (!otherName.equals(signerName) && documentSignerRepository.findByAnchor(documentId, otherName).isEmpty()) {
+                documentSignerRepository.create(documentId, otherName, null, null, "UNASSIGNED", otherName);
+            }
+        }
+        Optional<DocumentSignerRepository.DocumentSignerRecord> existing =
+                documentSignerRepository.findByAnchor(documentId, signerName);
+        if (existing.isPresent()) {
+            documentSignerRepository.updateSignatureType(existing.get().signerId(), signatureType);
+            return existing.get().signerId();
+        }
+        return documentSignerRepository.create(documentId, signerName, signerEmail, signerPhone, signatureType, signerName);
+    }
+
+    private boolean anyOtherSignerPending(String documentId) throws Exception {
+        for (DocumentSignerRepository.DocumentSignerRecord signer : documentSignerRepository.listForDocument(documentId)) {
+            if ("PENDING".equals(signer.status())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -300,14 +407,10 @@ public class Documents implements Action {
             return;
         }
         DocumentRepository.DocumentRecord document = documentOpt.get();
-        if (!"DRAFT".equals(document.status())) {
+        if (!"DRAFT".equals(document.status()) && !"PARTIALLY_SIGNED".equals(document.status())) {
             OutputProcessor.errorResponse(res, HttpServletResponse.SC_CONFLICT, "Conflict",
-                    "Document is " + document.status() + "; cannot initiate eSign (must be DRAFT - PENDING means an eSign session is already in progress).");
-            return;
-        }
-        if (!LocalFilesystemStorageProvider.PROVIDER_ID.equals(document.storageProviderId())) {
-            OutputProcessor.errorResponse(res, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error",
-                    "Unsupported storage provider for this document: " + document.storageProviderId());
+                    "Document is " + document.status() + "; cannot initiate eSign (must be DRAFT or " +
+                    "PARTIALLY_SIGNED - PENDING means an eSign session is already in progress).");
             return;
         }
 
@@ -316,22 +419,49 @@ public class Documents implements Action {
             OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request", "signerName is required.");
             return;
         }
+        Optional<DocumentSignerRepository.DocumentSignerRecord> existingSigner =
+                documentSignerRepository.findByAnchor(documentId, signerName);
+        if (existingSigner.isPresent() && "SIGNED".equals(existingSigner.get().status())) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_CONFLICT, "Conflict",
+                    "Signer '" + signerName + "' has already signed this document.");
+            return;
+        }
+        if (esignSessionRepository.findActiveForDocument(documentId).isPresent()) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_CONFLICT, "Conflict",
+                    "Another signer's Aadhaar eSign session is currently in progress on this document - " +
+                    "complete or deny it first.");
+            return;
+        }
         String signerEmail = body.path("signerEmail").asText(null);
         String signerPhone = body.path("signerPhone").asText(null);
         String reason = body.path("reason").asText(null);
 
-        StorageObjectRef originalRef = new StorageObjectRef(
-                document.storageProviderId(), document.originalStorageKey(), document.originalHash());
-        byte[] originalBytes = storageProvider.retrieve(originalRef);
+        DocumentStorageProvider storageProvider;
+        try {
+            storageProvider = StorageProviderRegistry.resolve(document.storageProviderId());
+        } catch (StorageException e) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error",
+                    "Unsupported storage provider for this document: " + document.storageProviderId());
+            return;
+        }
+
+        StorageObjectRef currentRef = currentVariantRef(document);
+        byte[] currentBytes = storageProvider.retrieve(currentRef);
 
         ExternalCmsSpliceService.PreparedSigning prepared = externalCmsSpliceService.prepare(
-                originalBytes, "Aadhaar eSign (Mock ESP)", signerName, reason);
+                currentBytes, "Aadhaar eSign (Mock ESP)", signerName, reason, signerName);
 
-        String signerId = documentSignerRepository.create(documentId, signerName, signerEmail, signerPhone, "AADHAAR_OTP");
+        String signerId;
+        try {
+            signerId = resolveSignerRow(documentId, currentBytes, signerName, "AADHAAR_OTP", signerEmail, signerPhone);
+        } catch (IllegalArgumentException e) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request", e.getMessage());
+            return;
+        }
         StorageObjectRef preparedRef = storageProvider.store(appSlug, documentId, "pending-esign", prepared.contentToHash());
 
         SigningSessionRequest sessionRequest = new SigningSessionRequest(documentId, appId, signerName, signerEmail,
-                signerPhone, HashUtil.sha256Hex(originalBytes), reason);
+                signerPhone, HashUtil.sha256Hex(currentBytes), reason);
         SigningSessionResponse sessionResponse = mockAadhaarEsignAdapter.initiateSigning(sessionRequest);
 
         esignSessionRepository.create(documentId, signerId, MockAadhaarEsignAdapter.PROVIDER_ID,
@@ -391,6 +521,7 @@ public class Documents implements Action {
             node.put("signerId", signer.signerId());
             node.put("signerName", signer.signerName());
             node.put("signatureType", signer.signatureType());
+            node.put("anchorElementId", signer.anchorElementId());
             node.put("status", signer.status());
             node.put("signedAt", signer.signedAt());
         }
@@ -410,9 +541,11 @@ public class Documents implements Action {
 
         String appId;
         String appSlug;
+        String appStorageProviderId;
         if (appContext != null) {
             appId = appContext.appId();
             appSlug = appContext.appSlug();
+            appStorageProviderId = appRepository.findById(appId).map(AppRepository.AppRecord::storageProviderId).orElse(null);
         } else {
             appId = body.path("appId").asText(null);
             if (appId == null) {
@@ -429,6 +562,7 @@ public class Documents implements Action {
                 return;
             }
             appSlug = appOpt.get().appSlug();
+            appStorageProviderId = appOpt.get().storageProviderId();
         }
 
         byte[] fileBytes;
@@ -440,6 +574,7 @@ public class Documents implements Action {
         }
 
         String documentId = UUID.randomUUID().toString();
+        DocumentStorageProvider storageProvider = StorageProviderRegistry.resolveForWrite(appStorageProviderId);
         StorageObjectRef ref = storageProvider.store(appSlug, documentId, "original", fileBytes);
         String originalHash = HashUtil.sha256Hex(fileBytes);
 
@@ -473,7 +608,7 @@ public class Documents implements Action {
             return;
         }
         LegalCertificateRepository.CertificateRecord cert = certOpt.get();
-        byte[] pdfBytes = storageProvider.retrieve(new StorageObjectRef(
+        byte[] pdfBytes = StorageProviderRegistry.resolve(cert.storageProviderId()).retrieve(new StorageObjectRef(
                 cert.storageProviderId(), cert.certificateStorageKey(), cert.certificateHash()));
         writePdf(res, pdfBytes, "legal-certificate-v" + cert.version() + ".pdf");
     }
@@ -535,13 +670,24 @@ public class Documents implements Action {
             }
         }
         if (certifyingKeyAlias == null) {
+            certifyingKeyAlias = systemDefaultKeyAlias();
+        }
+        if (certifyingKeyAlias == null) {
             OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request",
                     "certifyingKeyAlias is required: no default_key_alias is configured for this App.");
             return;
         }
 
+        DocumentStorageProvider storageProvider;
+        try {
+            storageProvider = StorageProviderRegistry.resolve(document.storageProviderId());
+        } catch (StorageException e) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error",
+                    "Unsupported storage provider for this document: " + document.storageProviderId());
+            return;
+        }
         LegalCertificateService.GeneratedCertificate certificate =
-                legalCertificateService.generate(certContext, document, certifyingKeyAlias);
+                legalCertificateService.generate(certContext, document, certifyingKeyAlias, storageProvider);
 
         String actorType = appContext != null ? "APP" : "PLATFORM_USER";
         String actorId = appContext != null ? appContext.appId() : InputProcessor.getUserId(req);
@@ -627,6 +773,7 @@ public class Documents implements Action {
             node.put("signerId", signer.signerId());
             node.put("signerName", signer.signerName());
             node.put("signatureType", signer.signatureType());
+            node.put("anchorElementId", signer.anchorElementId());
             node.put("status", signer.status());
             node.put("signedAt", signer.signedAt());
             if ("PENDING".equals(signer.status())) {
@@ -678,7 +825,8 @@ public class Documents implements Action {
         String storageKey = sealed ? document.sealedStorageKey() : document.originalStorageKey();
         String hash = sealed ? document.sealedHash() : document.originalHash();
 
-        byte[] pdfBytes = storageProvider.retrieve(new StorageObjectRef(document.storageProviderId(), storageKey, hash));
+        byte[] pdfBytes = StorageProviderRegistry.resolve(document.storageProviderId())
+                .retrieve(new StorageObjectRef(document.storageProviderId(), storageKey, hash));
         writePdf(res, pdfBytes, (sealed ? "sealed" : "original") + ".pdf");
     }
 

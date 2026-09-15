@@ -72,11 +72,9 @@ public class LegalCertificateService {
     private final TemplateRepository templateRepository = new TemplateRepository();
     private final LegalCertificateRepository certificateRepository = new LegalCertificateRepository();
     private final LocalPkiSigningService signingService;
-    private final DocumentStorageProvider storageProvider;
 
-    public LegalCertificateService(LocalPkiSigningService signingService, DocumentStorageProvider storageProvider) {
+    public LegalCertificateService(LocalPkiSigningService signingService) {
         this.signingService = signingService;
-        this.storageProvider = storageProvider;
     }
 
     public record GeneratedCertificate(
@@ -85,7 +83,7 @@ public class LegalCertificateService {
     }
 
     public GeneratedCertificate generate(AppContext appContext, DocumentRepository.DocumentRecord document,
-                                          String certifyingKeyAlias) throws Exception {
+                                          String certifyingKeyAlias, DocumentStorageProvider storageProvider) throws Exception {
         Integer templateVersion = null;
         if (document.templateId() != null) {
             templateVersion = templateRepository.findByIdForApp(appContext.appId(), document.templateId())

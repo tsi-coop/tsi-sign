@@ -11,8 +11,8 @@ import org.tsicoop.sign.framework.AppContext;
 import org.tsicoop.sign.framework.InputProcessor;
 import org.tsicoop.sign.framework.OutputProcessor;
 import org.tsicoop.sign.storage.DocumentStorageProvider;
-import org.tsicoop.sign.storage.LocalFilesystemStorageProvider;
 import org.tsicoop.sign.storage.StorageObjectRef;
+import org.tsicoop.sign.storage.StorageProviderRegistry;
 
 import java.util.Map;
 import java.util.Optional;
@@ -38,7 +38,6 @@ public class Templates implements Action {
     private final DocumentRepository documentRepository = new DocumentRepository();
     private final AppRepository appRepository = new AppRepository();
     private final DocumentGeneratorService generatorService = new OpenHtmlToPdfGeneratorServiceImpl();
-    private final DocumentStorageProvider storageProvider = new LocalFilesystemStorageProvider();
     private final AuditLogRepository auditLogRepository = new AuditLogRepository();
     private final AuthorizationService authorizationService = new AuthorizationService();
 
@@ -124,9 +123,11 @@ public class Templates implements Action {
 
         String appId;
         String appSlug;
+        String appStorageProviderId;
         if (appContext != null) {
             appId = appContext.appId();
             appSlug = appContext.appSlug();
+            appStorageProviderId = appRepository.findById(appId).map(AppRepository.AppRecord::storageProviderId).orElse(null);
         } else {
             appId = body.path("appId").asText(null);
             if (appId == null) {
@@ -143,6 +144,7 @@ public class Templates implements Action {
                 return;
             }
             appSlug = appOpt.get().appSlug();
+            appStorageProviderId = appOpt.get().storageProviderId();
         }
 
         Optional<TemplateRepository.TemplateRecord> template =
@@ -166,6 +168,7 @@ public class Templates implements Action {
         DocumentGenerationResult generated = generatorService.generatePdf(template.get().htmlContent(), payloadData);
 
         String documentId = UUID.randomUUID().toString();
+        DocumentStorageProvider storageProvider = StorageProviderRegistry.resolveForWrite(appStorageProviderId);
         StorageObjectRef ref = storageProvider.store(appSlug, documentId, "original", generated.pdfBytes());
 
         documentRepository.createDraftWithId(documentId, appId, templateId, documentTitle,

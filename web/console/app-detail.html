@@ -19,6 +19,7 @@
                 <a href="documents.html">Documents</a>
                 <a href="legal-evidence.html">Legal</a>
                 <a href="users.html" class="platform-admin-only">Users</a>
+                <a href="system-settings.html" class="platform-admin-only">Settings</a>
             </nav>
             <div class="side-foot">
                 <div class="side-user-row">
@@ -93,6 +94,17 @@
                 </form>
                 <div id="signing-notice" class="notice success" style="display:none;"></div>
             </div>
+            <div class="panel">
+                <h2 style="margin-top:0;">Storage Backend Override</h2>
+                <p class="muted">Leave blank to use the deployment-wide default storage backend. Set only when this
+                    App must use a specific backend (e.g. a Loan App required to keep agreements in privacy_vault).</p>
+                <form id="storage-form">
+                    <label>Storage provider ID</label>
+                    <input type="text" id="storage-provider" placeholder="local_fs, s3, or privacy_vault">
+                    <div style="margin-top:16px;"><button type="submit">Save</button></div>
+                </form>
+                <div id="storage-notice" class="notice success" style="display:none;"></div>
+            </div>
         </div>
 
         <div class="tab-panel" id="tab-admins">
@@ -146,13 +158,14 @@
                     <tr><th>Status</th><td><span class="badge ${app.isActive ? "active" : "inactive"}">${app.isActive ? "Active" : "Inactive"}</span></td></tr>
                     <tr><th>Default provider</th><td>${escapeHtml(app.defaultProviderId) || '<span class="muted">-</span>'}</td></tr>
                     <tr><th>Default key alias</th><td>${escapeHtml(app.defaultKeyAlias) || '<span class="muted">-</span>'}</td></tr>
-                    <tr><th>Storage backend</th><td class="muted">deployment default (local_fs)</td></tr>
+                    <tr><th>Storage backend</th><td>${app.storageProviderId ? escapeHtml(app.storageProviderId) : '<span class="muted">deployment default</span>'}</td></tr>
                     <tr><th>Created</th><td>${escapeHtml(app.createdAt)}</td></tr>
                 </table>`;
             document.getElementById("signing-provider").value = app.defaultProviderId || "";
             document.getElementById("signing-key-alias").value = app.defaultKeyAlias || "";
             document.getElementById("signing-webhook").value = app.webhookUrl || "";
             document.getElementById("rate-limit-rpm").value = app.rateLimitRpm != null ? app.rateLimitRpm : "";
+            document.getElementById("storage-provider").value = app.storageProviderId || "";
         }
 
         document.getElementById("rate-limit-form").addEventListener("submit", async (e) => {
@@ -220,6 +233,21 @@
                 loadOverview();
             } catch (err) {
                 showNotice(signingNotice, err.message, "error");
+            }
+        });
+
+        document.getElementById("storage-form").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const storageNotice = document.getElementById("storage-notice");
+            try {
+                await tsiCall("/api/v1/admin/apps", "update_storage_provider", {
+                    appId,
+                    storageProviderId: document.getElementById("storage-provider").value.trim() || null
+                });
+                showNotice(storageNotice, "Saved.", "success");
+                loadOverview();
+            } catch (err) {
+                showNotice(storageNotice, err.message, "error");
             }
         });
 

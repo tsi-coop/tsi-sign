@@ -38,6 +38,7 @@
 
 <div class="card">
     <div id="notice" class="notice"></div>
+    <p id="status-loading" class="sub" style="margin:0;">Loading…</p>
 
     <form id="setup-form" style="display:none;">
         <h1>First-Time Setup</h1>
@@ -79,8 +80,10 @@
     (async function init() {
         try {
             const status = await tsiCall("/api/v1/admin/setup", "setup_status", {}, true);
+            document.getElementById("status-loading").style.display = "none";
             document.getElementById(status.initialized ? "login-form" : "setup-form").style.display = "block";
         } catch (err) {
+            document.getElementById("status-loading").style.display = "none";
             showNotice(notice, err.message);
         }
     })();

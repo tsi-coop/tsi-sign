@@ -18,3 +18,4 @@
 /api/v1/admin/keys=org.tsicoop.sign.service.v1.Keys|CONSOLE
 /api/v1/admin/legal-certificates=org.tsicoop.sign.service.v1.LegalCertificates|CONSOLE
 /api/v1/admin/platform-users=org.tsicoop.sign.service.v1.PlatformUsers|CONSOLE
+/api/v1/admin/system-settings=org.tsicoop.sign.service.v1.SystemSettings|CONSOLE
