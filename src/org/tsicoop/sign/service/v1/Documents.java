@@ -56,6 +56,7 @@ public class Documents implements Action {
     private final AppRepository appRepository = new AppRepository();
     private final DocumentRepository documentRepository = new DocumentRepository();
     private final DocumentSignerRepository documentSignerRepository = new DocumentSignerRepository();
+    private final SignerDiscoveryService signerDiscoveryService = new SignerDiscoveryService(documentSignerRepository);
     private final AuditLogRepository auditLogRepository = new AuditLogRepository();
     private final PlatformUserRepository platformUserRepository = new PlatformUserRepository();
     private final LegalCertificateRepository legalCertificateRepository = new LegalCertificateRepository();
@@ -148,6 +149,7 @@ public class Documents implements Action {
                     OutputProcessor.errorResponse(res, HttpServletResponse.SC_NOT_FOUND, "Not Found", "Unknown _func: " + func);
             }
         } catch (Exception e) {
+            e.printStackTrace();
             OutputProcessor.errorResponse(res, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error", e.getMessage());
         }
     }
@@ -580,6 +582,7 @@ public class Documents implements Action {
 
         documentRepository.createDraftWithId(documentId, appId, null, documentTitle,
                 ref.providerId(), ref.storageKey(), originalHash);
+        signerDiscoveryService.discoverMarkers(documentId, fileBytes);
 
         String uploadActorType = appContext != null ? "APP" : "PLATFORM_USER";
         String uploadActorId = appContext != null ? appContext.appId() : InputProcessor.getUserId(req);

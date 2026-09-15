@@ -36,6 +36,8 @@ public class Templates implements Action {
 
     private final TemplateRepository templateRepository = new TemplateRepository();
     private final DocumentRepository documentRepository = new DocumentRepository();
+    private final DocumentSignerRepository documentSignerRepository = new DocumentSignerRepository();
+    private final SignerDiscoveryService signerDiscoveryService = new SignerDiscoveryService(documentSignerRepository);
     private final AppRepository appRepository = new AppRepository();
     private final DocumentGeneratorService generatorService = new OpenHtmlToPdfGeneratorServiceImpl();
     private final AuditLogRepository auditLogRepository = new AuditLogRepository();
@@ -70,6 +72,7 @@ public class Templates implements Action {
                     OutputProcessor.errorResponse(res, HttpServletResponse.SC_NOT_FOUND, "Not Found", "Unknown _func: " + func);
             }
         } catch (Exception e) {
+            e.printStackTrace();
             OutputProcessor.errorResponse(res, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error", e.getMessage());
         }
     }
@@ -165,7 +168,13 @@ public class Templates implements Action {
                 ? MAPPER.convertValue(body.get("payloadData"), Map.class)
                 : Map.of();
 
-        DocumentGenerationResult generated = generatorService.generatePdf(template.get().htmlContent(), payloadData);
+        DocumentGenerationResult generated;
+        try {
+            generated = generatorService.generatePdf(template.get().htmlContent(), payloadData);
+        } catch (TemplateRenderException e) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request", e.getMessage());
+            return;
+        }
 
         String documentId = UUID.randomUUID().toString();
         DocumentStorageProvider storageProvider = StorageProviderRegistry.resolveForWrite(appStorageProviderId);
@@ -173,6 +182,7 @@ public class Templates implements Action {
 
         documentRepository.createDraftWithId(documentId, appId, templateId, documentTitle,
                 ref.providerId(), ref.storageKey(), generated.sha256Hash());
+        signerDiscoveryService.discoverMarkers(documentId, generated.pdfBytes());
 
         String actorType = appContext != null ? "APP" : "PLATFORM_USER";
         String actorId = appContext != null ? appContext.appId() : InputProcessor.getUserId(req);
@@ -236,7 +246,13 @@ public class Templates implements Action {
                 ? MAPPER.convertValue(body.get("payloadData"), Map.class)
                 : Map.of();
 
-        DocumentGenerationResult result = generatorService.generatePdf(templateOpt.get().htmlContent(), payloadData);
+        DocumentGenerationResult result;
+        try {
+            result = generatorService.generatePdf(templateOpt.get().htmlContent(), payloadData);
+        } catch (TemplateRenderException e) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request", e.getMessage());
+            return;
+        }
 
         res.setStatus(HttpServletResponse.SC_OK);
         res.setContentType("application/pdf");
