@@ -25,10 +25,12 @@ import java.util.UUID;
  * SQL. funcs:
  *  - create_template, generate_document: BOTH — tenant acts under its own
  *    App; console acts under a body-supplied appId (RBAC-checked, §10.9).
- *  - list_templates, preview_template: CONSOLE only (§10.3; "Generate Test
- *    Document" persists nothing). A bare API-key caller has no role, so
- *    AuthorizationService naturally 403s these rather than needing a
- *    separate guard.
+ *  - list_templates, preview_template, deactivate_template, activate_template:
+ *    CONSOLE only (§10.3; "Generate Test Document" persists nothing).
+ *    A bare API-key caller has no role, so AuthorizationService naturally
+ *    403s these rather than needing a separate guard. Deactivating a
+ *    template is a forward-looking gate on generate_document, not a
+ *    delete - documents already generated from it are unaffected.
  */
 public class Templates implements Action {
 
@@ -67,6 +69,12 @@ public class Templates implements Action {
                     break;
                 case "preview_template":
                     previewTemplate(req, res, body);
+                    break;
+                case "deactivate_template":
+                    setTemplateActive(req, res, body, false);
+                    break;
+                case "activate_template":
+                    setTemplateActive(req, res, body, true);
                     break;
                 default:
                     OutputProcessor.errorResponse(res, HttpServletResponse.SC_NOT_FOUND, "Not Found", "Unknown _func: " + func);
@@ -156,6 +164,11 @@ public class Templates implements Action {
             OutputProcessor.errorResponse(res, HttpServletResponse.SC_NOT_FOUND, "Not Found", "No such template.");
             return;
         }
+        if (!template.get().active()) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request",
+                    "This template has been deactivated and can no longer be used to generate new documents.");
+            return;
+        }
 
         String documentTitle = body.path("documentTitle").asText(null);
         if (documentTitle == null) {
@@ -220,8 +233,37 @@ public class Templates implements Action {
             node.put("category", template.category());
             node.put("htmlContent", template.htmlContent());
             node.put("version", template.version());
+            node.put("active", template.active());
         }
         OutputProcessor.send(res, HttpServletResponse.SC_OK, array);
+    }
+
+    /**
+     * Deactivate/activate a template. CONSOLE only - a forward-looking gate
+     * (blocks new generate_document calls, §10.3) rather than a delete, so
+     * every document already generated from this template keeps working.
+     */
+    private void setTemplateActive(HttpServletRequest req, HttpServletResponse res, JsonNode body, boolean active)
+            throws Exception {
+        String appId = body.path("appId").asText(null);
+        String templateId = body.path("templateId").asText(null);
+        if (appId == null || templateId == null) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request", "appId and templateId are required.");
+            return;
+        }
+        if (!authorizationService.canWrite(InputProcessor.getUserRole(req), InputProcessor.getUserId(req), appId)) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_FORBIDDEN, "Forbidden", "You do not have write access to this App.");
+            return;
+        }
+        boolean updated = templateRepository.setActive(appId, templateId, active);
+        if (!updated) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_NOT_FOUND, "Not Found", "No such template.");
+            return;
+        }
+        ObjectNode json = MAPPER.createObjectNode();
+        json.put("templateId", templateId);
+        json.put("active", active);
+        OutputProcessor.send(res, HttpServletResponse.SC_OK, json);
     }
 
     /** §10.3 "Generate Test Document" — renders a sample PDF, persists nothing. CONSOLE only. */

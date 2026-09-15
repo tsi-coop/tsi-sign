@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+<!--
+  Offer Letter
+  Single-signer example (company/HR authorized signatory).
+  Payload: examples/payloads/offer-letter.json
+-->
+<style>
+  @page { size: A4; margin: 25mm 20mm; }
+  body { font-family: 'Times New Roman', Georgia, serif; font-size: 12pt; color: #1a1a1a; line-height: 1.55; }
+  .letterhead { text-align: center; border-bottom: 2px solid #1a3d6d; padding-bottom: 10px; margin-bottom: 24px; }
+  .letterhead .company { font-size: 18pt; font-weight: bold; color: #1a3d6d; letter-spacing: 1px; }
+  .letterhead .address { font-size: 10pt; color: #555; margin-top: 4px; }
+  .letterhead .doc-title { font-size: 14pt; margin-top: 14px; text-transform: uppercase; letter-spacing: 2px; }
+  .ref-line { font-size: 10.5pt; color: #555; margin-bottom: 16px; }
+  p { text-align: justify; margin: 8px 0; }
+  table.meta { width: 100%; border-collapse: collapse; margin: 14px 0; }
+  table.meta td { padding: 4px 6px; font-size: 11pt; vertical-align: top; }
+  table.meta td.label { color: #555; width: 35%; }
+  .sig-block { margin-top: 50px; }
+  .sig-role { font-weight: bold; margin-bottom: 46px; }
+  .sig-line { border-top: 1px solid #333; padding-top: 4px; width: 260px; }
+  .sig-marker { color: #ffffff; font-size: 1px; }
+</style>
+</head>
+<body>
+  <div class="letterhead">
+    <div class="company">{{company_name}}</div>
+    <div class="address">{{company_address}}</div>
+    <div class="doc-title">Offer of Employment</div>
+  </div>
+
+  <div class="ref-line">Date: {{offer_date}}</div>
+  <div class="ref-line">To: {{candidate_name}}<br/>{{candidate_address}}</div>
+
+  <p>Dear {{candidate_name}},</p>
+
+  <p>We are pleased to offer you the position of <strong>{{position_title}}</strong> in the {{department}} department at {{company_name}}, reporting to {{reporting_manager}}. This letter sets out the key terms of your employment.</p>
+
+  <table class="meta">
+    <tr><td class="label">Position</td><td>{{position_title}}</td></tr>
+    <tr><td class="label">Department</td><td>{{department}}</td></tr>
+    <tr><td class="label">Reporting Manager</td><td>{{reporting_manager}}</td></tr>
+    <tr><td class="label">Date of Joining</td><td>{{joining_date}}</td></tr>
+    <tr><td class="label">Annual CTC</td><td>{{annual_ctc}}</td></tr>
+  </table>
+
+  <p>This offer is contingent upon the successful completion of any pre-employment checks and is open for your acceptance until <strong>{{response_deadline}}</strong>, after which it may be withdrawn at the Company's discretion.</p>
+
+  <p>Please sign and return a copy of this letter to indicate your acceptance of the above terms. We look forward to welcoming you to the team.</p>
+
+  <div class="sig-block">
+    <div class="sig-role">For {{company_name}}</div>
+    <span class="sig-marker">[[TSI_SIGNATURE]]</span>
+    <div class="sig-line">{{hr_name}}<br/>{{hr_designation}}</div>
+  </div>
+</body>
+</html>

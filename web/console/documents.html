@@ -50,14 +50,18 @@
                     <label>App</label>
                     <select id="app-select"></select>
                 </div>
+                <div>
+                    <label>&nbsp;</label>
+                    <label style="font-weight:normal;"><input type="checkbox" id="show-archived-checkbox"> Show archived</label>
+                </div>
             </div>
         </div>
 
         <div id="content" style="display:none;">
             <div class="panel">
                 <table>
-                    <thead><tr><th>Title</th><th>Template</th><th>Status</th><th>Created</th></tr></thead>
-                    <tbody id="documents-body"><tr><td colspan="4" class="muted">Loading...</td></tr></tbody>
+                    <thead><tr><th>Title</th><th>Template</th><th>Status</th><th>Created</th><th></th></tr></thead>
+                    <tbody id="documents-body"><tr><td colspan="5" class="muted">Loading...</td></tr></tbody>
                 </table>
             </div>
         </div>
@@ -72,10 +76,6 @@
     <div class="modal-overlay" id="create-modal">
         <div class="modal wide">
             <h2>New Document</h2>
-            <div class="tabs">
-                <button type="button" class="active" data-doc-tab="generate">Generate from Template</button>
-                <button type="button" data-doc-tab="upload">Upload PDF</button>
-            </div>
 
             <div class="tab-panel active" id="doc-tab-generate">
                 <form id="generate-document-form">
@@ -86,19 +86,6 @@
                     <div class="modal-actions">
                         <button type="button" onclick="closeModal('create-modal')">Cancel</button>
                         <button type="submit">Generate</button>
-                    </div>
-                </form>
-            </div>
-
-            <div class="tab-panel" id="doc-tab-upload">
-                <p class="hint">Upload a PDF directly to sign - no template required.</p>
-                <form id="upload-document-form">
-                    <div class="field"><label>Document title</label><input type="text" id="upload-doc-title" required placeholder="Signed Agreement.pdf"></div>
-                    <div class="field"><label>PDF file</label><input type="file" id="upload-doc-file" accept="application/pdf,.pdf" required></div>
-                    <div id="upload-document-notice" class="notice error" style="display:none;"></div>
-                    <div class="modal-actions">
-                        <button type="button" onclick="closeModal('create-modal')">Cancel</button>
-                        <button type="submit">Upload</button>
                     </div>
                 </form>
             </div>
@@ -119,39 +106,47 @@
 
         async function loadTemplatesForSelect() {
             templatesCache = await tsiCall("/api/v1/templates", "list_templates", { appId });
+            const activeTemplates = templatesCache.filter(t => t.active);
             const select = document.getElementById("gen-doc-template");
-            select.innerHTML = templatesCache.length === 0
+            select.innerHTML = activeTemplates.length === 0
                 ? '<option value="">Create a template first</option>'
-                : templatesCache.map(t => `<option value="${escapeHtml(t.templateId)}">${escapeHtml(t.templateName)}</option>`).join("");
+                : activeTemplates.map(t => `<option value="${escapeHtml(t.templateId)}">${escapeHtml(t.templateName)}</option>`).join("");
         }
 
         async function loadDocuments() {
-            const documents = await tsiCall("/api/v1/documents", "list_documents", { appId });
+            const includeArchived = document.getElementById("show-archived-checkbox").checked;
+            const documents = await tsiCall("/api/v1/documents", "list_documents", { appId, includeArchived });
             const body = document.getElementById("documents-body");
             body.innerHTML = documents.length === 0
-                ? '<tr><td colspan="4" class="muted">No documents yet.</td></tr>'
+                ? '<tr><td colspan="5" class="muted">No documents yet.</td></tr>'
                 : documents.map(d => `
                     <tr>
-                        <td><a href="document-detail.html?appId=${encodeURIComponent(appId)}&documentId=${encodeURIComponent(d.documentId)}">${escapeHtml(d.title)}</a></td>
+                        <td><a href="document-detail.html?appId=${encodeURIComponent(appId)}&documentId=${encodeURIComponent(d.documentId)}">${escapeHtml(d.title)}</a>${d.archivedAt ? ' <span class="badge inactive">Archived</span>' : ""}</td>
                         <td>${escapeHtml(d.templateName) || '<span class="muted">-</span>'}</td>
                         <td><span class="badge ${d.status === "SIGNED" ? "active" : "inactive"}">${escapeHtml(d.status)}</span></td>
                         <td class="muted">${escapeHtml(d.createdAt)}</td>
+                        <td><button class="small" onclick="toggleDocumentArchived('${d.documentId}', ${!!d.archivedAt})">${d.archivedAt ? "Unarchive" : "Archive"}</button></td>
                     </tr>`).join("");
         }
 
-        document.getElementById("new-document-btn").addEventListener("click", () => {
-            document.getElementById("generate-document-notice").style.display = "none";
-            document.getElementById("upload-document-notice").style.display = "none";
-            openModal("create-modal");
+        async function toggleDocumentArchived(documentId, currentlyArchived) {
+            try {
+                await tsiCall("/api/v1/documents", currentlyArchived ? "unarchive_document" : "archive_document", {
+                    appId, documentId
+                });
+                await loadDocuments();
+            } catch (err) {
+                showNotice(notice, err.message);
+            }
+        }
+
+        document.getElementById("show-archived-checkbox").addEventListener("change", () => {
+            loadDocuments().catch(err => showNotice(notice, err.message));
         });
 
-        document.querySelectorAll("[data-doc-tab]").forEach(btn => {
-            btn.addEventListener("click", () => {
-                document.querySelectorAll("[data-doc-tab]").forEach(b => b.classList.remove("active"));
-                document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
-                btn.classList.add("active");
-                document.getElementById("doc-tab-" + btn.dataset.docTab).classList.add("active");
-            });
+        document.getElementById("new-document-btn").addEventListener("click", () => {
+            document.getElementById("generate-document-notice").style.display = "none";
+            openModal("create-modal");
         });
 
         document.getElementById("generate-document-form").addEventListener("submit", async (e) => {
@@ -179,38 +174,6 @@
                 window.location.href = `document-detail.html?appId=${encodeURIComponent(appId)}&documentId=${encodeURIComponent(result.documentId)}`;
             } catch (err) {
                 showNotice(genNotice, err.message);
-            }
-        });
-
-        function readFileAsBase64(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result.split(",")[1]);
-                reader.onerror = () => reject(new Error("Could not read file."));
-                reader.readAsDataURL(file);
-            });
-        }
-
-        document.getElementById("upload-document-form").addEventListener("submit", async (e) => {
-            e.preventDefault();
-            const uploadNotice = document.getElementById("upload-document-notice");
-            showNotice(uploadNotice, "");
-            const fileInput = document.getElementById("upload-doc-file");
-            const file = fileInput.files[0];
-            if (!file) {
-                showNotice(uploadNotice, "Choose a PDF file first.");
-                return;
-            }
-            try {
-                const fileContentBase64 = await readFileAsBase64(file);
-                const result = await tsiCall("/api/v1/documents", "upload_document", {
-                    appId,
-                    documentTitle: document.getElementById("upload-doc-title").value,
-                    fileContentBase64
-                });
-                window.location.href = `document-detail.html?appId=${encodeURIComponent(appId)}&documentId=${encodeURIComponent(result.documentId)}`;
-            } catch (err) {
-                showNotice(uploadNotice, err.message);
             }
         });
 

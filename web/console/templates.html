@@ -56,7 +56,7 @@
         <div id="content" style="display:none;">
             <div class="panel">
                 <table>
-                    <thead><tr><th>Name</th><th>Category</th><th>Version</th><th></th></tr></thead>
+                    <thead><tr><th>Name</th><th>Category</th><th>Version</th><th>Status</th><th></th><th></th></tr></thead>
                     <tbody id="templates-body"><tr><td colspan="4" class="muted">Loading...</td></tr></tbody>
                 </table>
             </div>
@@ -132,14 +132,27 @@
             templatesCache = await tsiCall("/api/v1/templates", "list_templates", { appId });
             const body = document.getElementById("templates-body");
             body.innerHTML = templatesCache.length === 0
-                ? '<tr><td colspan="4" class="muted">No templates yet.</td></tr>'
+                ? '<tr><td colspan="6" class="muted">No templates yet.</td></tr>'
                 : templatesCache.map(t => `
                     <tr>
                         <td>${escapeHtml(t.templateName)}</td>
                         <td>${escapeHtml(t.category) || "-"}</td>
                         <td>${t.version}</td>
+                        <td><span class="badge ${t.active ? "active" : "inactive"}">${t.active ? "Active" : "Inactive"}</span></td>
                         <td><button class="secondary small" onclick="openPreview('${t.templateId}')">Generate Test Document</button></td>
+                        <td><button class="small" onclick="toggleTemplateActive('${t.templateId}', ${t.active})">${t.active ? "Deactivate" : "Activate"}</button></td>
                     </tr>`).join("");
+        }
+
+        async function toggleTemplateActive(templateId, currentlyActive) {
+            try {
+                await tsiCall("/api/v1/templates", currentlyActive ? "deactivate_template" : "activate_template", {
+                    appId, templateId
+                });
+                await loadTemplates();
+            } catch (err) {
+                showNotice(notice, err.message);
+            }
         }
 
         document.getElementById("new-template-btn").addEventListener("click", () => {

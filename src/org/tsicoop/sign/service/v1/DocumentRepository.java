@@ -22,12 +22,13 @@ public class DocumentRepository {
             String originalHash,
             String sealedStorageKey,
             String sealedHash,
-            String status
+            String status,
+            String archivedAt
     ) {
     }
 
     public record DocumentSummary(
-            String documentId, String title, String templateName, String status, String createdAt
+            String documentId, String title, String templateName, String status, String createdAt, String archivedAt
     ) {
     }
 
@@ -76,7 +77,8 @@ public class DocumentRepository {
             pool = new PoolDB();
             con = pool.getConnection();
             ps = con.prepareStatement("SELECT document_id, app_id, template_id, title, storage_provider_id, " +
-                    "original_storage_key, original_hash, sealed_storage_key, sealed_hash, status " +
+                    "original_storage_key, original_hash, sealed_storage_key, sealed_hash, status, " +
+                    "archived_at::text AS archived_at " +
                     "FROM documents WHERE document_id = ?::uuid AND app_id = ?::uuid");
             ps.setString(1, documentId);
             ps.setString(2, appId);
@@ -92,7 +94,8 @@ public class DocumentRepository {
                         rs.getString("original_hash"),
                         rs.getString("sealed_storage_key"),
                         rs.getString("sealed_hash"),
-                        rs.getString("status")));
+                        rs.getString("status"),
+                        rs.getString("archived_at")));
             }
             return Optional.empty();
         } catch (Exception e) {
@@ -118,7 +121,8 @@ public class DocumentRepository {
             pool = new PoolDB();
             con = pool.getConnection();
             ps = con.prepareStatement("SELECT document_id, app_id, template_id, title, storage_provider_id, " +
-                    "original_storage_key, original_hash, sealed_storage_key, sealed_hash, status " +
+                    "original_storage_key, original_hash, sealed_storage_key, sealed_hash, status, " +
+                    "archived_at::text AS archived_at " +
                     "FROM documents WHERE document_id = ?::uuid");
             ps.setString(1, documentId);
             rs = ps.executeQuery();
@@ -133,7 +137,8 @@ public class DocumentRepository {
                         rs.getString("original_hash"),
                         rs.getString("sealed_storage_key"),
                         rs.getString("sealed_hash"),
-                        rs.getString("status")));
+                        rs.getString("status"),
+                        rs.getString("archived_at")));
             }
             return Optional.empty();
         } catch (Exception e) {
@@ -223,6 +228,37 @@ public class DocumentRepository {
         }
     }
 
+    /**
+     * Archiving is independent of signing-lifecycle status (§ documents.status)
+     * - a SIGNED document stays SIGNED once archived, it's just hidden from
+     * the default Documents list and frozen against further seal/eSign
+     * activity until unarchived. Scoped to appId for tenant isolation;
+     * returns false if no row matched, so the caller can 404.
+     */
+    public boolean archive(String appId, String documentId) throws Exception {
+        return setArchived(appId, documentId, true);
+    }
+
+    public boolean unarchive(String appId, String documentId) throws Exception {
+        return setArchived(appId, documentId, false);
+    }
+
+    private boolean setArchived(String appId, String documentId, boolean archived) throws Exception {
+        Connection con = null;
+        PreparedStatement ps = null;
+        PoolDB pool = new PoolDB();
+        try {
+            con = pool.getConnection();
+            ps = con.prepareStatement("UPDATE documents SET archived_at = " + (archived ? "now()" : "NULL") +
+                    ", updated_at = now() WHERE document_id = ?::uuid AND app_id = ?::uuid");
+            ps.setString(1, documentId);
+            ps.setString(2, appId);
+            return ps.executeUpdate() > 0;
+        } finally {
+            pool.cleanup(null, ps, con);
+        }
+    }
+
     public void insertSeal(String documentId, String signerId, String providerId, String keyAlias,
                             String transactionId, String pkcs7Signature, String signatureStandard,
                             String caIssuer, String authType) throws Exception {
@@ -250,25 +286,32 @@ public class DocumentRepository {
         }
     }
 
-    /** §10.4 Documents & Audit Trail list, scoped to one App. */
-    public List<DocumentSummary> listForApp(String appId) throws Exception {
+    /**
+     * §10.4 Documents & Audit Trail list, scoped to one App. Archived
+     * documents are excluded by default - the console's normal list is
+     * meant to stay uncluttered by what's been put away; includeArchived
+     * powers an explicit "show archived" view instead.
+     */
+    public List<DocumentSummary> listForApp(String appId, boolean includeArchived) throws Exception {
         Connection con = null;
         PreparedStatement ps = null;
         ResultSet rs = null;
         PoolDB pool = new PoolDB();
         try {
             con = pool.getConnection();
-            ps = con.prepareStatement("SELECT d.document_id, d.title, t.template_name, d.status, " +
-                    "d.created_at::text AS created_at FROM documents d " +
+            String sql = "SELECT d.document_id, d.title, t.template_name, d.status, " +
+                    "d.created_at::text AS created_at, d.archived_at::text AS archived_at FROM documents d " +
                     "LEFT JOIN templates t ON t.template_id = d.template_id " +
-                    "WHERE d.app_id = ?::uuid ORDER BY d.created_at DESC");
+                    "WHERE d.app_id = ?::uuid" + (includeArchived ? "" : " AND d.archived_at IS NULL") +
+                    " ORDER BY d.created_at DESC";
+            ps = con.prepareStatement(sql);
             ps.setString(1, appId);
             rs = ps.executeQuery();
             List<DocumentSummary> documents = new ArrayList<>();
             while (rs.next()) {
                 documents.add(new DocumentSummary(
                         rs.getString("document_id"), rs.getString("title"), rs.getString("template_name"),
-                        rs.getString("status"), rs.getString("created_at")));
+                        rs.getString("status"), rs.getString("created_at"), rs.getString("archived_at")));
             }
             return documents;
         } finally {
