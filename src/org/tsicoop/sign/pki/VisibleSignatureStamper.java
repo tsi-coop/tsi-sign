@@ -50,10 +50,16 @@ public class VisibleSignatureStamper {
             String signerLine, String signedByLine, String reasonLine, String dateLine) throws Exception {
         BufferedImage stamp = composeStampImage(signerLine, signedByLine, reasonLine, dateLine);
 
-        float pageHeight = document.getPage(placement.pageIndex()).getMediaBox().getHeight();
+        // PDVisibleSignDesigner.yAxis() already expects a top-down offset (distance
+        // from the top of the page) - PDVisibleSigBuilder.createSignatureRectangle
+        // internally computes templateHeight - yAxis to get the real PDF (bottom-up)
+        // rectangle. placement.y() (from SignaturePlaceholderLocator/PDFTextStripper)
+        // is already top-down, so it must be passed through as-is: subtracting it from
+        // pageHeight here double-flips it, mirroring the stamp to the wrong marker
+        // when a document has more than one placeholder at different heights.
         PDVisibleSignDesigner designer = new PDVisibleSignDesigner(document, stamp, placement.pageIndex() + 1);
         designer.xAxis(placement.x())
-                .yAxis(pageHeight - placement.y())
+                .yAxis(placement.y())
                 .width(STAMP_WIDTH_PT)
                 .height(STAMP_HEIGHT_PT)
                 .signatureFieldName(fieldName);
@@ -73,10 +79,16 @@ public class VisibleSignatureStamper {
             String signerLine, String signedByLine, String reasonLine, String dateLine) throws Exception {
         BufferedImage stamp = composeStampImage(signerLine, signedByLine, reasonLine, dateLine);
         PDPage page = document.getPage(placement.pageIndex());
+        // drawImage() takes native PDF (bottom-up) coordinates, but placement.y() is
+        // top-down (see buildSignatureAppearance) - convert, then drop by the stamp's
+        // height so the marker position is the top-left corner of the stamp, matching
+        // buildSignatureAppearance's convention.
+        float pageHeight = page.getMediaBox().getHeight();
+        float bottomUpY = pageHeight - placement.y() - STAMP_HEIGHT_PT;
         PDImageXObject imageXObject = LosslessFactory.createFromImage(document, stamp);
         try (PDPageContentStream cs = new PDPageContentStream(document, page,
                 PDPageContentStream.AppendMode.APPEND, true, true)) {
-            cs.drawImage(imageXObject, placement.x(), placement.y() - STAMP_HEIGHT_PT, STAMP_WIDTH_PT, STAMP_HEIGHT_PT);
+            cs.drawImage(imageXObject, placement.x(), bottomUpY, STAMP_WIDTH_PT, STAMP_HEIGHT_PT);
         }
         // COSDictionary mutations on pre-existing objects (the page's /Contents
         // and /Resources here) aren't auto-tracked - saveIncremental() only
