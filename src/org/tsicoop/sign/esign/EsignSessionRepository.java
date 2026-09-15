@@ -94,6 +94,33 @@ public class EsignSessionRepository {
         }
     }
 
+    /**
+     * Multi-signature documents (prep/TSI-Sign-Multi-Signature-Documents-Plan.md
+     * §4): guards against a Corporate Seal call racing an in-flight Aadhaar
+     * eSign session for a *different* signer on the same document.
+     */
+    public Optional<EsignSessionRecord> findActiveForDocument(String documentId) throws Exception {
+        Connection con = null;
+        PreparedStatement ps = null;
+        ResultSet rs = null;
+        PoolDB pool = new PoolDB();
+        try {
+            con = pool.getConnection();
+            ps = con.prepareStatement("SELECT session_id, document_id, signer_id, provider_id, transaction_id, " +
+                    "prepared_storage_key, byte_range_0, byte_range_1, byte_range_2, byte_range_3, " +
+                    "signature_field_name, status, gateway_url FROM esign_sessions " +
+                    "WHERE document_id = ?::uuid AND status = 'INITIATED' ORDER BY created_at DESC LIMIT 1");
+            ps.setString(1, documentId);
+            rs = ps.executeQuery();
+            if (rs.next()) {
+                return Optional.of(toRecord(rs));
+            }
+            return Optional.empty();
+        } finally {
+            pool.cleanup(rs, ps, con);
+        }
+    }
+
     public void markStatus(String sessionId, String status) throws Exception {
         Connection con = null;
         PreparedStatement ps = null;

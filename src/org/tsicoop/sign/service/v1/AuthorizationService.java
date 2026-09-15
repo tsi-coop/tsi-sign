@@ -17,6 +17,11 @@ public class AuthorizationService {
         return "PLATFORM_ADMIN".equals(role);
     }
 
+    /** Deployment-wide System Settings (storage backend config, houses secrets) - same bar as Users & Roles. */
+    public boolean canManageSystemSettings(String role) {
+        return "PLATFORM_ADMIN".equals(role);
+    }
+
     /** Read access to one App's templates/documents/keys/legal evidence. AUDITOR is read-only, all Apps. */
     public boolean canRead(String role, String userId, String appId) throws Exception {
         if ("PLATFORM_ADMIN".equals(role) || "AUDITOR".equals(role)) {

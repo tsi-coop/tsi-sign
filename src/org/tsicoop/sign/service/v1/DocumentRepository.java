@@ -173,34 +173,51 @@ public class DocumentRepository {
         }
     }
 
-    /** Reverts a PENDING document back to DRAFT after a failed/denied eSign attempt, so it can be retried. */
-    public void markDraft(String documentId) throws Exception {
+    /**
+     * Reverts a PENDING document after a failed/denied eSign attempt, so it
+     * can be retried - DRAFT if no signer has completed yet, or
+     * PARTIALLY_SIGNED if this was one signer's turn on an otherwise
+     * multi-signature document (prep/TSI-Sign-Multi-Signature-Documents-Plan.md).
+     */
+    public void markStatus(String documentId, String status) throws Exception {
         Connection con = null;
         PreparedStatement ps = null;
         PoolDB pool = new PoolDB();
         try {
             con = pool.getConnection();
-            ps = con.prepareStatement("UPDATE documents SET status = 'DRAFT', updated_at = now() " +
-                    "WHERE document_id = ?::uuid");
-            ps.setString(1, documentId);
+            ps = con.prepareStatement("UPDATE documents SET status = ?, updated_at = now() WHERE document_id = ?::uuid");
+            ps.setString(1, status);
+            ps.setString(2, documentId);
             ps.executeUpdate();
         } finally {
             pool.cleanup(null, ps, con);
         }
     }
 
-    public void markSealed(String documentId, String sealedStorageKey, String sealedHash) throws Exception {
+    /**
+     * Optimistic-concurrency seal write (prep/TSI-Sign-Multi-Signature-Documents-Plan.md
+     * §5): only applies if sealed_hash still matches what the caller read
+     * immediately before sealing - two signers racing to seal at once means
+     * the second write fails cleanly (returns false) instead of silently
+     * clobbering the first signer's work. status is parameterized
+     * (PARTIALLY_SIGNED vs SIGNED) rather than hardcoded, since a document
+     * with outstanding signers isn't fully executed yet.
+     */
+    public boolean markSealedIfHashMatches(String documentId, String sealedStorageKey, String sealedHash,
+                                            String expectedPreviousSealedHash, String newStatus) throws Exception {
         Connection con = null;
         PreparedStatement ps = null;
         PoolDB pool = new PoolDB();
         try {
             con = pool.getConnection();
             ps = con.prepareStatement("UPDATE documents SET sealed_storage_key = ?, sealed_hash = ?, " +
-                    "status = 'SIGNED', updated_at = now() WHERE document_id = ?::uuid");
+                    "status = ?, updated_at = now() WHERE document_id = ?::uuid AND sealed_hash IS NOT DISTINCT FROM ?");
             ps.setString(1, sealedStorageKey);
             ps.setString(2, sealedHash);
-            ps.setString(3, documentId);
-            ps.executeUpdate();
+            ps.setString(3, newStatus);
+            ps.setString(4, documentId);
+            ps.setString(5, expectedPreviousSealedHash);
+            return ps.executeUpdate() > 0;
         } finally {
             pool.cleanup(null, ps, con);
         }

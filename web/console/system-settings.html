@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Settings - TSI Sign Admin Console</title>
+    <link rel="stylesheet" href="assets/console.css">
+</head>
+<body>
+    <header class="mobilebar">
+        <a class="brand" href="dashboard.html"><span class="mark">TS</span><span>TSI Sign</span></a>
+    </header>
+    <div class="app">
+        <aside class="side">
+            <a class="brand" href="dashboard.html"><span class="mark">TS</span><span>TSI Sign</span></a>
+            <nav class="nav">
+                <a href="dashboard.html">Dashboard</a>
+                <a href="apps.html">Apps</a>
+                <a href="templates.html">Templates</a>
+                <a href="documents.html">Documents</a>
+                <a href="legal-evidence.html">Legal</a>
+                <a href="users.html" class="platform-admin-only">Users</a>
+                <a href="system-settings.html" class="active platform-admin-only">Settings</a>
+            </nav>
+            <div class="side-foot">
+                <div class="side-user-row">
+                    <div id="sidebar-user-avatar" class="avatar">-</div>
+                    <div style="min-width:0; flex:1;">
+                        <div id="sidebar-user-name" class="side-user-name"></div>
+                        <div id="sidebar-user-role" class="side-user-role"></div>
+                    </div>
+                </div>
+                <a href="#" onclick="logout(); return false;" class="signout">Sign Out</a>
+            </div>
+        </aside>
+
+        <main class="main">
+        <div class="page-head">
+            <div>
+                <div class="eyebrow">Admin Console</div>
+                <h1>Settings</h1>
+                <p class="subtitle">Deployment-wide storage backend config. Admin only. Any field left blank falls
+                    back to its equivalent environment variable - a deployment that never touches this screen keeps
+                    working exactly as it does today.</p>
+            </div>
+        </div>
+
+        <div id="notice" class="notice error" style="display:none;"></div>
+        <div id="save-notice" class="notice success" style="display:none;"></div>
+
+        <form id="settings-form">
+            <div class="panel">
+                <h2 style="margin-top:0;">Default Storage Backend</h2>
+                <div class="field">
+                    <label>Deployment-wide default provider ID</label>
+                    <input type="text" id="default-storage-provider" placeholder="local_fs, s3, or privacy_vault">
+                </div>
+                <p class="hint">Leave blank to fall back to DEFAULT_STORAGE_PROVIDER_ID (default: local_fs). An
+                    individual App can still override this from its own App Detail page.</p>
+            </div>
+
+            <div class="panel">
+                <h2 style="margin-top:0;">S3-Compatible Storage</h2>
+                <p class="muted">Covers AWS S3 and self-hosted S3-compatible stores (MinIO, Ceph RGW, R2) - same
+                    client, endpoint URL is the only difference.</p>
+                <div class="field"><label>Endpoint URL (blank = AWS S3)</label><input type="text" id="s3-endpoint" placeholder="https://minio.internal:9000"></div>
+                <div class="field"><label>Region</label><input type="text" id="s3-region" placeholder="us-east-1"></div>
+                <div class="field"><label>Bucket</label><input type="text" id="s3-bucket" placeholder="tsi-sign-documents"></div>
+                <div class="field"><label>Access key</label><input type="text" id="s3-access-key" autocomplete="off"></div>
+                <div class="field">
+                    <label>Secret key</label>
+                    <input type="password" id="s3-secret-key" autocomplete="new-password" placeholder="leave blank to keep the current value">
+                    <p class="hint" id="s3-secret-status"></p>
+                </div>
+                <div class="field">
+                    <label style="display:flex; align-items:center; gap:8px; text-transform:none; font-weight:500; color:var(--ink);">
+                        <input type="checkbox" id="s3-path-style" style="width:auto;"> Path-style addressing (required for MinIO)
+                    </label>
+                </div>
+                <div class="field">
+                    <label>Server-side encryption</label>
+                    <select id="s3-sse">
+                        <option value="">None</option>
+                        <option value="AES256">SSE-S3 (AES256)</option>
+                        <option value="aws:kms">SSE-KMS</option>
+                    </select>
+                </div>
+                <div class="field"><label>KMS key ID (SSE-KMS only)</label><input type="text" id="s3-kms-key-id"></div>
+            </div>
+
+            <div class="panel">
+                <h2 style="margin-top:0;">TSI Privacy Vault</h2>
+                <p class="muted">Delegates document storage to a co-deployed TSI Privacy Vault instance.</p>
+                <div class="field"><label>Base URL</label><input type="text" id="pv-base-url" placeholder="https://privacy-vault.internal"></div>
+                <div class="field">
+                    <label>API key</label>
+                    <input type="password" id="pv-api-key" autocomplete="new-password" placeholder="leave blank to keep the current value">
+                    <p class="hint" id="pv-key-status"></p>
+                </div>
+                <div class="field"><label>Entity code (pre-provisioned FILE-flavor entity)</label><input type="text" id="pv-entity-code"></div>
+            </div>
+
+            <div style="margin-top:16px;"><button type="submit">Save Settings</button></div>
+        </form>
+        </main>
+    </div>
+
+    <script src="assets/console.js"></script>
+    <script>
+        loadTopbar();
+        const notice = document.getElementById("notice");
+        const saveNotice = document.getElementById("save-notice");
+
+        async function loadSettings() {
+            const settings = await tsiCall("/api/v1/admin/system-settings", "get_settings", {});
+            document.getElementById("default-storage-provider").value = settings.defaultStorageProviderId || "";
+            document.getElementById("s3-endpoint").value = settings.s3Endpoint || "";
+            document.getElementById("s3-region").value = settings.s3Region || "";
+            document.getElementById("s3-bucket").value = settings.s3Bucket || "";
+            document.getElementById("s3-access-key").value = settings.s3AccessKey || "";
+            document.getElementById("s3-path-style").checked = settings.s3PathStyleAccess === true;
+            document.getElementById("s3-sse").value = settings.s3Sse || "";
+            document.getElementById("s3-kms-key-id").value = settings.s3KmsKeyId || "";
+            document.getElementById("s3-secret-status").textContent = settings.s3SecretKeyConfigured
+                ? "A secret key is currently configured." : "No secret key configured yet.";
+            document.getElementById("pv-base-url").value = settings.privacyVaultBaseUrl || "";
+            document.getElementById("pv-entity-code").value = settings.privacyVaultEntityCode || "";
+            document.getElementById("pv-key-status").textContent = settings.privacyVaultApiKeyConfigured
+                ? "An API key is currently configured." : "No API key configured yet.";
+        }
+
+        document.getElementById("settings-form").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            saveNotice.style.display = "none";
+            try {
+                await tsiCall("/api/v1/admin/system-settings", "update_settings", {
+                    defaultStorageProviderId: document.getElementById("default-storage-provider").value.trim() || null,
+                    s3Endpoint: document.getElementById("s3-endpoint").value.trim() || null,
+                    s3Region: document.getElementById("s3-region").value.trim() || null,
+                    s3Bucket: document.getElementById("s3-bucket").value.trim() || null,
+                    s3AccessKey: document.getElementById("s3-access-key").value.trim() || null,
+                    s3SecretKey: document.getElementById("s3-secret-key").value || null,
+                    s3PathStyleAccess: document.getElementById("s3-path-style").checked,
+                    s3Sse: document.getElementById("s3-sse").value || null,
+                    s3KmsKeyId: document.getElementById("s3-kms-key-id").value.trim() || null,
+                    privacyVaultBaseUrl: document.getElementById("pv-base-url").value.trim() || null,
+                    privacyVaultApiKey: document.getElementById("pv-api-key").value || null,
+                    privacyVaultEntityCode: document.getElementById("pv-entity-code").value.trim() || null
+                });
+                document.getElementById("s3-secret-key").value = "";
+                document.getElementById("pv-api-key").value = "";
+                showNotice(saveNotice, "Settings saved.", "success");
+                await loadSettings();
+            } catch (err) {
+                showNotice(notice, err.message);
+            }
+        });
+
+        loadSettings().catch(err => showNotice(notice, err.message));
+    </script>
+</body>
+</html>

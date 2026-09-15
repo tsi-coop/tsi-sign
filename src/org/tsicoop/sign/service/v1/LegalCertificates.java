@@ -9,9 +9,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.tsicoop.sign.framework.Action;
 import org.tsicoop.sign.framework.InputProcessor;
 import org.tsicoop.sign.framework.OutputProcessor;
-import org.tsicoop.sign.storage.DocumentStorageProvider;
-import org.tsicoop.sign.storage.LocalFilesystemStorageProvider;
 import org.tsicoop.sign.storage.StorageObjectRef;
+import org.tsicoop.sign.storage.StorageProviderRegistry;
 
 import java.util.Optional;
 
@@ -29,7 +28,6 @@ public class LegalCertificates implements Action {
 
     private final LegalCertificateRepository certificateRepository = new LegalCertificateRepository();
     private final DocumentRepository documentRepository = new DocumentRepository();
-    private final DocumentStorageProvider storageProvider = new LocalFilesystemStorageProvider();
     private final AuthorizationService authorizationService = new AuthorizationService();
 
     @Override
@@ -134,7 +132,7 @@ public class LegalCertificates implements Action {
             OutputProcessor.errorResponse(res, HttpServletResponse.SC_FORBIDDEN, "Forbidden", "You do not have access to this certificate.");
             return;
         }
-        byte[] pdfBytes = storageProvider.retrieve(new StorageObjectRef(
+        byte[] pdfBytes = StorageProviderRegistry.resolve(cert.storageProviderId()).retrieve(new StorageObjectRef(
                 cert.storageProviderId(), cert.certificateStorageKey(), cert.certificateHash()));
 
         res.setStatus(HttpServletResponse.SC_OK);

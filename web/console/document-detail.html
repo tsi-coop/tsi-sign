@@ -19,6 +19,7 @@
                 <a href="documents.html" class="active">Documents</a>
                 <a href="legal-evidence.html">Legal</a>
                 <a href="users.html" class="platform-admin-only">Users</a>
+                <a href="system-settings.html" class="platform-admin-only">Settings</a>
             </nav>
             <div class="side-foot">
                 <div class="side-user-row">
@@ -43,8 +44,8 @@
         <h2>Signers (Aadhaar eSign)</h2>
         <div class="panel">
             <table>
-                <thead><tr><th>Name</th><th>Type</th><th>Status</th><th>Signed At</th><th></th></tr></thead>
-                <tbody id="signers-body"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
+                <thead><tr><th>Name</th><th>Type</th><th>Status</th><th>Signed At</th><th></th><th></th></tr></thead>
+                <tbody id="signers-body"><tr><td colspan="6" class="muted">Loading…</td></tr></tbody>
             </table>
         </div>
 
@@ -115,49 +116,41 @@
         loadTopbar();
 
         let currentDoc = null;
+        let esignTargetAnchor = null;
 
         async function load() {
             currentDoc = await tsiCall("/api/v1/documents", "get_document", { appId, documentId });
             document.getElementById("doc-title").textContent = currentDoc.title;
 
-            const canSeal = currentDoc.status === "DRAFT";
+            const canSeal = currentDoc.status === "DRAFT" || currentDoc.status === "PARTIALLY_SIGNED";
+            const hasSigners = currentDoc.signers.length > 0;
+            const statusBadgeClass = currentDoc.status === "SIGNED" ? "active"
+                : currentDoc.status === "PARTIALLY_SIGNED" ? "neutral" : "inactive";
             document.getElementById("overview-panel").innerHTML = `
                 <table>
                     <tr><th>Document ID</th><td>${escapeHtml(currentDoc.documentId)}</td></tr>
-                    <tr><th>Status</th><td><span class="badge ${currentDoc.status === "SIGNED" ? "active" : "inactive"}">${escapeHtml(currentDoc.status)}</span></td></tr>
+                    <tr><th>Status</th><td><span class="badge ${statusBadgeClass}">${escapeHtml(currentDoc.status)}</span></td></tr>
                     <tr><th>Original Hash (SHA-256)</th><td style="font-family:ui-monospace,monospace; font-size:12px;">${escapeHtml(currentDoc.originalHash)}</td></tr>
                     <tr><th>Sealed Hash (SHA-256)</th><td style="font-family:ui-monospace,monospace; font-size:12px;">${escapeHtml(currentDoc.sealedHash) || '<span class="muted">-</span>'}</td></tr>
                 </table>
                 <div style="margin-top:16px;">
                     <button id="download-document-btn">Download ${currentDoc.hasSealed ? "Signed" : "Original"} PDF</button>
-                    ${currentDoc.status === "DRAFT" ? '<button id="seal-document-btn" style="margin-left:8px;">Apply Corporate Seal</button>' : ""}
-                    ${currentDoc.status === "DRAFT" ? '<button class="secondary" id="esign-btn" style="margin-left:8px;">Send for Aadhaar eSign</button>' : ""}
+                    ${canSeal && !hasSigners ? '<button id="seal-document-btn" style="margin-left:8px;">Apply Corporate Seal</button>' : ""}
+                    ${canSeal && !hasSigners ? '<button class="secondary" id="esign-btn" style="margin-left:8px;">Send for Aadhaar eSign</button>' : ""}
                 </div>
                 <div id="seal-notice" class="notice error" style="display:none; margin-top:12px;"></div>`;
             document.getElementById("download-document-btn").addEventListener("click", () => {
                 tsiOpenBlob("/api/v1/documents", "download_document", { appId, documentId })
                     .catch(err => showNotice(notice, err.message));
             });
-            if (canSeal) {
-                document.getElementById("seal-document-btn").addEventListener("click", async () => {
-                    const sealNotice = document.getElementById("seal-notice");
-                    try {
-                        await tsiCall("/api/v1/documents", "seal_local", { appId, documentId });
-                        await load();
-                    } catch (err) {
-                        showNotice(sealNotice, err.message);
-                    }
-                });
-                document.getElementById("esign-btn").addEventListener("click", () => {
-                    document.getElementById("esign-form").reset();
-                    document.getElementById("esign-notice").style.display = "none";
-                    openModal("esign-modal");
-                });
+            if (canSeal && !hasSigners) {
+                document.getElementById("seal-document-btn").addEventListener("click", () => sealLocal(null));
+                document.getElementById("esign-btn").addEventListener("click", () => openEsignModal(null));
             }
 
             const signersBody = document.getElementById("signers-body");
             signersBody.innerHTML = currentDoc.signers.length === 0
-                ? '<tr><td colspan="5" class="muted">No signers yet - use "Send for Aadhaar eSign" above.</td></tr>'
+                ? '<tr><td colspan="6" class="muted">No signers yet - use "Send for Aadhaar eSign" or "Apply Corporate Seal" above.</td></tr>'
                 : currentDoc.signers.map(s => `
                     <tr>
                         <td>${escapeHtml(s.signerName)}</td>
@@ -165,7 +158,14 @@
                         <td><span class="badge ${s.status === "SIGNED" ? "active" : s.status === "FAILED" ? "inactive" : "neutral"}">${escapeHtml(s.status)}</span></td>
                         <td class="muted">${escapeHtml(s.signedAt) || "-"}</td>
                         <td>${s.gatewayUrl ? `<a class="btn secondary" href="${escapeHtml(s.gatewayUrl)}" target="_blank" rel="noopener">Open Consent Page</a>` : ""}</td>
+                        <td>${s.status === "PENDING" && canSeal ? signerActionButtons(s) : ""}</td>
                     </tr>`).join("");
+            signersBody.querySelectorAll("[data-seal-anchor]").forEach(btn => {
+                btn.addEventListener("click", () => sealLocal(btn.dataset.sealAnchor));
+            });
+            signersBody.querySelectorAll("[data-esign-anchor]").forEach(btn => {
+                btn.addEventListener("click", () => openEsignModal(btn.dataset.esignAnchor));
+            });
 
             const sealsBody = document.getElementById("seals-body");
             sealsBody.innerHTML = currentDoc.seals.length === 0
@@ -192,13 +192,61 @@
             renderLegalPanel();
         }
 
+        /**
+         * signerName now doubles as the [[TSI_SIGNATURE:name]] marker match
+         * key (prep/TSI-Sign-Multi-Signature-Documents-Plan.md), so a scoped
+         * per-signer row locks it to that row's anchorElementId; the global
+         * button (no existing signer rows yet) leaves it free-text, exactly
+         * as before.
+         */
+        function openEsignModal(anchorElementId) {
+            esignTargetAnchor = anchorElementId;
+            document.getElementById("esign-form").reset();
+            document.getElementById("esign-notice").style.display = "none";
+            const nameField = document.getElementById("esign-signer-name");
+            if (anchorElementId) {
+                nameField.value = anchorElementId;
+                nameField.readOnly = true;
+            } else {
+                nameField.readOnly = false;
+            }
+            openModal("esign-modal");
+        }
+
+        async function sealLocal(anchorElementId) {
+            const sealNotice = document.getElementById("seal-notice");
+            try {
+                await tsiCall("/api/v1/documents", "seal_local", {
+                    appId, documentId, signerName: anchorElementId || undefined
+                });
+                await load();
+            } catch (err) {
+                if (sealNotice) showNotice(sealNotice, err.message);
+                else showNotice(notice, err.message);
+            }
+        }
+
+        /** A discovered-but-unclaimed marker can go either route - offer both until someone acts on it. */
+        function signerActionButtons(signer) {
+            const anchor = signer.anchorElementId;
+            if (!anchor) return "";
+            let html = "";
+            if (signer.signatureType === "LOCAL_PKI" || signer.signatureType === "UNASSIGNED") {
+                html += `<button class="small" data-seal-anchor="${escapeHtml(anchor)}">Apply Corporate Seal</button>`;
+            }
+            if (signer.signatureType === "AADHAAR_OTP" || signer.signatureType === "UNASSIGNED") {
+                html += ` <button class="small secondary" data-esign-anchor="${escapeHtml(anchor)}">Send for Aadhaar eSign</button>`;
+            }
+            return html;
+        }
+
         document.getElementById("esign-form").addEventListener("submit", async (e) => {
             e.preventDefault();
             const esignNotice = document.getElementById("esign-notice");
             try {
                 const result = await tsiCall("/api/v1/documents", "initiate_esign", {
                     appId, documentId,
-                    signerName: document.getElementById("esign-signer-name").value.trim(),
+                    signerName: esignTargetAnchor || document.getElementById("esign-signer-name").value.trim(),
                     signerEmail: document.getElementById("esign-signer-email").value.trim() || null,
                     signerPhone: document.getElementById("esign-signer-phone").value.trim() || null,
                     reason: document.getElementById("esign-reason").value.trim() || null

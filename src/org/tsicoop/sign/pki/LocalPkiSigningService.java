@@ -64,6 +64,23 @@ public class LocalPkiSigningService {
 
     public SealResult seal(byte[] originalPdfBytes, String keyAlias, String reason, String location,
             String signerIdentity) throws Exception {
+        return seal(originalPdfBytes, keyAlias, reason, location, signerIdentity, null);
+    }
+
+    /**
+     * @param targetPlaceholderName null (today's callers): every located
+     *                              marker gets stamped - first becomes the
+     *                              real widget, the rest plain overlay
+     *                              stamps - unchanged single-operation
+     *                              behavior. Non-null (multi-signature
+     *                              documents, prep/TSI-Sign-Multi-Signature-Documents-Plan.md):
+     *                              only that one named marker becomes the
+     *                              real widget; every *other* marker is left
+     *                              completely untouched so it's still
+     *                              available for a later signer's turn.
+     */
+    public SealResult seal(byte[] originalPdfBytes, String keyAlias, String reason, String location,
+            String signerIdentity, String targetPlaceholderName) throws Exception {
         KeyStore.PrivateKeyEntry keyEntry = keyStoreProvider.getPrivateKeyEntry(keyAlias);
 
         try (PDDocument document = PDDocument.load(originalPdfBytes)) {
@@ -89,7 +106,7 @@ public class LocalPkiSigningService {
 
             if (!placements.isEmpty()) {
                 stampCorporateSeal(document, signatureOptions, placements, keyAlias, effectiveReason,
-                        signDate, signerIdentity);
+                        signDate, signerIdentity, targetPlaceholderName);
             }
 
             document.addSignature(signature, signatureInterface, signatureOptions);
@@ -103,15 +120,18 @@ public class LocalPkiSigningService {
     }
 
     /**
-     * Draws the visible Corporate Seal at every located placeholder. The
-     * first one found (reading order) becomes the real signature widget via
-     * {@code signatureOptions}; any others are plain overlay stamps drawn
-     * directly onto the document now, before the signature's byte-range
-     * hash is computed by {@code addSignature}.
+     * Draws the visible Corporate Seal. With no target, every located
+     * placeholder gets stamped - the first one found (reading order)
+     * becomes the real signature widget via {@code signatureOptions}, the
+     * rest are plain overlay stamps drawn directly onto the document now,
+     * before the signature's byte-range hash is computed by {@code
+     * addSignature}. With a target, only that named placeholder is touched
+     * at all - the rest are left exactly as rendered, for a later signer.
      */
     private void stampCorporateSeal(PDDocument document, SignatureOptions signatureOptions,
             Map<String, SignaturePlaceholderLocator.Placement> placements, String keyAlias,
-            String effectiveReason, Calendar signDate, String signerIdentity) throws Exception {
+            String effectiveReason, Calendar signDate, String signerIdentity, String targetPlaceholderName)
+            throws Exception {
         SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss z");
         dateFormat.setTimeZone(signDate.getTimeZone());
 
@@ -120,11 +140,15 @@ public class LocalPkiSigningService {
         String reasonLine = "Reason: " + truncate(effectiveReason, 40);
         String dateLine = "Date: " + dateFormat.format(signDate.getTime());
 
-        String primaryName = placements.keySet().iterator().next();
-        for (Map.Entry<String, SignaturePlaceholderLocator.Placement> entry : placements.entrySet()) {
-            if (!entry.getKey().equals(primaryName)) {
-                VisibleSignatureStamper.drawOverlayStamp(
-                        document, entry.getValue(), signerLine, signedByLine, reasonLine, dateLine);
+        boolean targeted = targetPlaceholderName != null && placements.containsKey(targetPlaceholderName);
+        String primaryName = targeted ? targetPlaceholderName : placements.keySet().iterator().next();
+
+        if (!targeted) {
+            for (Map.Entry<String, SignaturePlaceholderLocator.Placement> entry : placements.entrySet()) {
+                if (!entry.getKey().equals(primaryName)) {
+                    VisibleSignatureStamper.drawOverlayStamp(
+                            document, entry.getValue(), signerLine, signedByLine, reasonLine, dateLine);
+                }
             }
         }
 

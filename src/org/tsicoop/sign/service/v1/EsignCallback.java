@@ -15,8 +15,8 @@ import org.tsicoop.sign.framework.InputProcessor;
 import org.tsicoop.sign.framework.OutputProcessor;
 import org.tsicoop.sign.pki.LocalKeyStoreProvider;
 import org.tsicoop.sign.storage.DocumentStorageProvider;
-import org.tsicoop.sign.storage.LocalFilesystemStorageProvider;
 import org.tsicoop.sign.storage.StorageObjectRef;
+import org.tsicoop.sign.storage.StorageProviderRegistry;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -45,7 +45,6 @@ public class EsignCallback implements Action {
     private final DocumentRepository documentRepository = new DocumentRepository();
     private final AppRepository appRepository = new AppRepository();
     private final AuditLogRepository auditLogRepository = new AuditLogRepository();
-    private final DocumentStorageProvider storageProvider = new LocalFilesystemStorageProvider();
     private final ExternalCmsSpliceService spliceService = new ExternalCmsSpliceService();
     private final MockAadhaarEsignAdapter mockAdapter;
 
@@ -134,7 +133,12 @@ public class EsignCallback implements Action {
         }
         esignSessionRepository.markStatus(session.sessionId(), "FAILED");
         documentSignerRepository.markStatus(session.signerId(), "FAILED");
-        documentRepository.markDraft(session.documentId());
+
+        // Revert PENDING back to whatever it was before this in-flight session: PARTIALLY_SIGNED
+        // if another signer already completed their turn on this document, else DRAFT.
+        boolean anySignerAlreadySigned = documentSignerRepository.listForDocument(session.documentId()).stream()
+                .anyMatch(s -> "SIGNED".equals(s.status()));
+        documentRepository.markStatus(session.documentId(), anySignerAlreadySigned ? "PARTIALLY_SIGNED" : "DRAFT");
 
         Optional<DocumentRepository.DocumentRecord> documentOpt = documentRepository.findById(session.documentId());
         if (documentOpt.isPresent()) {
@@ -178,6 +182,15 @@ public class EsignCallback implements Action {
         DocumentSignerRepository.DocumentSignerRecord signer = signerOpt.get();
         DocumentRepository.DocumentRecord document = documentOpt.get();
 
+        DocumentStorageProvider storageProvider;
+        try {
+            storageProvider = StorageProviderRegistry.resolve(document.storageProviderId());
+        } catch (Exception e) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error",
+                    "Unsupported storage provider for this document: " + document.storageProviderId());
+            return;
+        }
+
         StorageObjectRef preparedRef = new StorageObjectRef(
                 document.storageProviderId(), session.preparedStorageKey(), null);
         byte[] contentToHash = storageProvider.retrieve(preparedRef);
@@ -197,11 +210,22 @@ public class EsignCallback implements Action {
         String appSlug = appOpt.map(AppRepository.AppRecord::appSlug).orElse("app");
 
         StorageObjectRef sealedRef = storageProvider.store(appSlug, document.documentId(), "sealed", sealedBytes);
-        documentRepository.markSealed(document.documentId(), sealedRef.storageKey(), HashUtil.sha256Hex(sealedBytes));
+
+        documentSignerRepository.markStatus(signer.signerId(), "SIGNED");
+        boolean anyStillPending = documentSignerRepository.listForDocument(document.documentId()).stream()
+                .anyMatch(s -> "PENDING".equals(s.status()));
+        String newStatus = anyStillPending ? "PARTIALLY_SIGNED" : "SIGNED";
+
+        boolean updated = documentRepository.markSealedIfHashMatches(document.documentId(), sealedRef.storageKey(),
+                HashUtil.sha256Hex(sealedBytes), document.sealedHash(), newStatus);
+        if (!updated) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_CONFLICT, "Conflict",
+                    "Another signature was just applied to this document - retry.");
+            return;
+        }
         documentRepository.insertSeal(document.documentId(), signer.signerId(), MockAadhaarEsignAdapter.PROVIDER_ID,
                 null, transactionId, Base64.getEncoder().encodeToString(result.pkcs7Signature()), "PAdES-B-B",
                 result.caIssuer(), result.authType());
-        documentSignerRepository.markStatus(signer.signerId(), "SIGNED");
         esignSessionRepository.markStatus(session.sessionId(), "COMPLETED");
 
         auditLogRepository.log(document.appId(), document.documentId(), "ESIGN_COMPLETED", "SYSTEM",
@@ -210,7 +234,7 @@ public class EsignCallback implements Action {
         dispatchWebhook(appOpt.orElse(null), document.documentId());
 
         ObjectNode json = MAPPER.createObjectNode();
-        json.put("status", "SIGNED");
+        json.put("status", newStatus);
         OutputProcessor.send(res, HttpServletResponse.SC_OK, json);
     }
 

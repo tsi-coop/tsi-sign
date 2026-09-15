@@ -77,6 +77,10 @@ public class Apps implements Action {
                     if (!requireWrite(res, role, userId, appId)) return;
                     updateRateLimit(body, res, appId);
                     break;
+                case "update_storage_provider":
+                    if (!requireWrite(res, role, userId, appId)) return;
+                    updateStorageProvider(body, res, appId);
+                    break;
                 case "list_admins":
                     if (!requireRead(res, role, userId, appId)) return;
                     listAdmins(res, appId);
@@ -191,6 +195,16 @@ public class Apps implements Action {
         OutputProcessor.send(res, HttpServletResponse.SC_OK, MAPPER.createObjectNode().put("status", "updated"));
     }
 
+    /** Chunk 12, §5.2: per-App storage backend override (null = deployment-wide default). */
+    private void updateStorageProvider(JsonNode body, HttpServletResponse res, String appId) throws Exception {
+        if (appRepository.findById(appId).isEmpty()) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_NOT_FOUND, "Not Found", "No such App.");
+            return;
+        }
+        appRepository.updateStorageProvider(appId, body.path("storageProviderId").asText(null));
+        OutputProcessor.send(res, HttpServletResponse.SC_OK, MAPPER.createObjectNode().put("status", "updated"));
+    }
+
     private void listAdmins(HttpServletResponse res, String appId) throws Exception {
         if (appRepository.findById(appId).isEmpty()) {
             OutputProcessor.errorResponse(res, HttpServletResponse.SC_NOT_FOUND, "Not Found", "No such App.");
@@ -239,6 +253,7 @@ public class Apps implements Action {
         node.put("defaultProviderId", app.defaultProviderId());
         node.put("defaultKeyAlias", app.defaultKeyAlias());
         node.put("webhookUrl", app.webhookUrl());
+        node.put("storageProviderId", app.storageProviderId());
         if (app.rateLimitRpm() != null) {
             node.put("rateLimitRpm", app.rateLimitRpm());
         } else {
