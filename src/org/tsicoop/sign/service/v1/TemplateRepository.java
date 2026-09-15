@@ -86,6 +86,11 @@ public class TemplateRepository {
 
     /** §10.3 Templates list, scoped to one App. */
     public List<TemplateRecord> listForApp(String appId) throws Exception {
+        return listForApp(appId, 1, Integer.MAX_VALUE);
+    }
+
+    /** §10.3 Templates list, paginated (1-based page, LIMIT/OFFSET - matches tsi-compass's list_controls convention). */
+    public List<TemplateRecord> listForApp(String appId, int page, int pageSize) throws Exception {
         Connection con = null;
         PreparedStatement ps = null;
         ResultSet rs = null;
@@ -93,8 +98,10 @@ public class TemplateRepository {
         try {
             con = pool.getConnection();
             ps = con.prepareStatement("SELECT template_id, app_id, template_name, category, html_content, version, active " +
-                    "FROM templates WHERE app_id = ?::uuid ORDER BY updated_at DESC");
+                    "FROM templates WHERE app_id = ?::uuid ORDER BY updated_at DESC LIMIT ? OFFSET ?");
             ps.setString(1, appId);
+            ps.setInt(2, pageSize);
+            ps.setLong(3, (long) (page - 1) * pageSize);
             rs = ps.executeQuery();
             List<TemplateRecord> templates = new ArrayList<>();
             while (rs.next()) {
@@ -108,6 +115,23 @@ public class TemplateRepository {
                         rs.getBoolean("active")));
             }
             return templates;
+        } finally {
+            pool.cleanup(rs, ps, con);
+        }
+    }
+
+    public int countForApp(String appId) throws Exception {
+        Connection con = null;
+        PreparedStatement ps = null;
+        ResultSet rs = null;
+        PoolDB pool = new PoolDB();
+        try {
+            con = pool.getConnection();
+            ps = con.prepareStatement("SELECT COUNT(*) FROM templates WHERE app_id = ?::uuid");
+            ps.setString(1, appId);
+            rs = ps.executeQuery();
+            rs.next();
+            return rs.getInt(1);
         } finally {
             pool.cleanup(rs, ps, con);
         }

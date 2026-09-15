@@ -70,6 +70,7 @@
             <input type="password" id="login-password" required autocomplete="current-password">
         </div>
         <button type="submit" class="btn">Sign In</button>
+        <a href="password-reset.html" style="display:block;text-align:center;margin-top:16px;font-size:12.5px;color:var(--muted);text-decoration:none;">Forgot password?</a>
     </form>
 </div>
 
@@ -95,7 +96,8 @@
             const email = document.getElementById("setup-email").value;
             const password = document.getElementById("setup-password").value;
             await tsiCall("/api/v1/admin/setup", "setup", { fullName, email, password }, true);
-            await tsiCall("/api/v1/admin/auth", "login", { email, password }, true);
+            const result = await tsiCall("/api/v1/admin/auth", "login", { email, password }, true);
+            setAuthToken(result.token);
             window.location.href = "dashboard.html";
         } catch (err) {
             showNotice(notice, err.message);
@@ -107,7 +109,8 @@
         try {
             const email = document.getElementById("login-email").value;
             const password = document.getElementById("login-password").value;
-            await tsiCall("/api/v1/admin/auth", "login", { email, password }, true);
+            const result = await tsiCall("/api/v1/admin/auth", "login", { email, password }, true);
+            setAuthToken(result.token);
             window.location.href = "dashboard.html";
         } catch (err) {
             showNotice(notice, err.message);

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Audit - TSI Sign Admin Console</title>
+    <link rel="stylesheet" href="assets/console.css">
+</head>
+<body>
+    <header class="mobilebar">
+        <a class="brand" href="dashboard.html"><span class="mark">TS</span><span>TSI Sign</span></a>
+    </header>
+    <div class="app">
+        <aside class="side">
+            <a class="brand" href="dashboard.html"><span class="mark">TS</span><span>TSI Sign</span></a>
+            <nav class="nav">
+                <a href="dashboard.html">Dashboard</a>
+                <a href="apps.html">Apps</a>
+                <a href="templates.html">Templates</a>
+                <a href="documents.html">Documents</a>
+                <a href="legal-evidence.html">Legal</a>
+                <a href="audit.html" class="active">Audit</a>
+                <a href="users.html" class="platform-admin-only">Users</a>
+                <a href="system-settings.html" class="platform-admin-only">Settings</a>
+            </nav>
+            <div class="side-foot">
+                <div class="side-user-row">
+                    <div id="sidebar-user-avatar" class="avatar">-</div>
+                    <div style="min-width:0; flex:1;">
+                        <div id="sidebar-user-name" class="side-user-name"></div>
+                        <div id="sidebar-user-role" class="side-user-role"></div>
+                    </div>
+                </div>
+                <a href="#" onclick="logout(); return false;" class="signout">Sign Out</a>
+            </div>
+        </aside>
+
+        <main class="main">
+        <div class="page-head">
+            <div>
+                <div class="eyebrow">Admin Console</div>
+                <h1>Audit</h1>
+                <p class="subtitle">Every recorded event across your Apps - document lifecycle, seals, eSign, legal certificates.</p>
+            </div>
+        </div>
+
+        <div id="notice" class="notice error" style="display:none;"></div>
+
+        <div class="panel">
+            <div class="row">
+                <div>
+                    <label>App</label>
+                    <select id="app-filter"><option value="">All Apps</option></select>
+                </div>
+                <div>
+                    <label>Event</label>
+                    <select id="event-filter">
+                        <option value="">All Events</option>
+                        <option value="DOCUMENT_CREATED">Document Created</option>
+                        <option value="DOCUMENT_UPLOADED">Document Uploaded</option>
+                        <option value="SEALED">Sealed</option>
+                        <option value="ESIGN_INITIATED">eSign Initiated</option>
+                        <option value="ESIGN_COMPLETED">eSign Completed</option>
+                        <option value="ESIGN_DENIED">eSign Denied</option>
+                        <option value="DOCUMENT_ARCHIVED">Document Archived</option>
+                        <option value="DOCUMENT_UNARCHIVED">Document Unarchived</option>
+                        <option value="LEGAL_CERTIFICATE_GENERATED">Legal Certificate Generated</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <table>
+                <thead><tr><th>When</th><th>Event</th><th>App</th><th>Document</th><th>Actor</th><th>IP</th></tr></thead>
+                <tbody id="audit-body"><tr><td colspan="6" class="muted">Loading...</td></tr></tbody>
+            </table>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px;">
+                <span id="audit-page-info" class="muted"></span>
+                <span id="audit-page-btns"></span>
+            </div>
+        </div>
+        </main>
+    </div>
+
+    <script src="assets/console.js"></script>
+    <script>
+        const notice = document.getElementById("notice");
+        loadTopbar();
+
+        let auditPage = 1;
+
+        function eventLabel(eventType) {
+            const option = document.querySelector(`#event-filter option[value="${eventType}"]`);
+            return option ? option.textContent : eventType;
+        }
+
+        function actorLabel(entry) {
+            if (entry.actorType === "PLATFORM_USER") return entry.actorName || "Platform User";
+            if (entry.actorType === "APP") return entry.appName ? entry.appName + " (App)" : "App";
+            return "System";
+        }
+
+        async function loadAuditLogs(page) {
+            auditPage = page || 1;
+            const appId = document.getElementById("app-filter").value || undefined;
+            const eventType = document.getElementById("event-filter").value || undefined;
+            try {
+                const result = await tsiCall("/api/v1/admin/audit-logs", "list_audit_logs", {
+                    appId, eventType, page: auditPage, limit: 25
+                });
+                const body = document.getElementById("audit-body");
+                body.innerHTML = result.auditLogs.length === 0
+                    ? '<tr><td colspan="6" class="muted">No audit events.</td></tr>'
+                    : result.auditLogs.map(a => `
+                        <tr>
+                            <td class="muted">${escapeHtml(a.createdAt)}</td>
+                            <td><span class="badge neutral">${escapeHtml(eventLabel(a.eventType))}</span></td>
+                            <td>${escapeHtml(a.appName)}</td>
+                            <td>${a.documentId
+                                ? `<a href="document-detail.html?appId=${encodeURIComponent(a.appId)}&documentId=${encodeURIComponent(a.documentId)}">${escapeHtml(a.documentTitle) || "View"}</a>`
+                                : '<span class="muted">-</span>'}</td>
+                            <td>${escapeHtml(actorLabel(a))}</td>
+                            <td class="muted">${escapeHtml(a.ipAddress) || "-"}</td>
+                        </tr>`).join("");
+                renderPagination(result, "audit-page-info", "audit-page-btns", "event", loadAuditLogs);
+            } catch (err) {
+                showNotice(notice, err.message);
+            }
+        }
+
+        document.getElementById("app-filter").addEventListener("change", () => loadAuditLogs(1));
+        document.getElementById("event-filter").addEventListener("change", () => loadAuditLogs(1));
+
+        (async function init() {
+            try {
+                const apps = (await tsiCall("/api/v1/admin/apps", "list_apps", { limit: 500 })).apps;
+                const select = document.getElementById("app-filter");
+                select.innerHTML = '<option value="">All Apps</option>' +
+                    apps.map(a => `<option value="${escapeHtml(a.appId)}">${escapeHtml(a.appName)}</option>`).join("");
+                await loadAuditLogs(1);
+            } catch (err) {
+                showNotice(notice, err.message);
+            }
+        })();
+    </script>
+</body>
+</html>

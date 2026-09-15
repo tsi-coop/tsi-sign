@@ -140,4 +140,54 @@ public class PlatformUserRepository {
             pool.cleanup(null, ps, con);
         }
     }
+
+    /** Break-glass recovery key (§ RecoveryKeyGenerator): not single-use, persists until replaced. */
+    public boolean setRecoveryKeyHash(String userId, String recoveryKeyHash) throws Exception {
+        Connection con = null;
+        PreparedStatement ps = null;
+        PoolDB pool = new PoolDB();
+        try {
+            con = pool.getConnection();
+            ps = con.prepareStatement("UPDATE platform_users SET recovery_key_hash = ? WHERE user_id = ?::uuid");
+            ps.setString(1, recoveryKeyHash);
+            ps.setString(2, userId);
+            return ps.executeUpdate() > 0;
+        } finally {
+            pool.cleanup(null, ps, con);
+        }
+    }
+
+    /** True if this active user's recovery_key_hash matches - used by the public password-reset flow. */
+    public boolean verifyRecoveryKey(String email, String recoveryKeyHash) throws Exception {
+        Connection con = null;
+        PreparedStatement ps = null;
+        ResultSet rs = null;
+        PoolDB pool = new PoolDB();
+        try {
+            con = pool.getConnection();
+            ps = con.prepareStatement("SELECT 1 FROM platform_users " +
+                    "WHERE email = ? AND recovery_key_hash = ? AND is_active = TRUE");
+            ps.setString(1, email);
+            ps.setString(2, recoveryKeyHash);
+            rs = ps.executeQuery();
+            return rs.next();
+        } finally {
+            pool.cleanup(rs, ps, con);
+        }
+    }
+
+    public void updatePasswordHash(String email, String passwordHash) throws Exception {
+        Connection con = null;
+        PreparedStatement ps = null;
+        PoolDB pool = new PoolDB();
+        try {
+            con = pool.getConnection();
+            ps = con.prepareStatement("UPDATE platform_users SET password_hash = ? WHERE email = ?");
+            ps.setString(1, passwordHash);
+            ps.setString(2, email);
+            ps.executeUpdate();
+        } finally {
+            pool.cleanup(null, ps, con);
+        }
+    }
 }

@@ -18,6 +18,7 @@
                 <a href="templates.html" class="active">Templates</a>
                 <a href="documents.html">Documents</a>
                 <a href="legal-evidence.html">Legal</a>
+                <a href="audit.html">Audit</a>
                 <a href="users.html" class="platform-admin-only">Users</a>
                 <a href="system-settings.html" class="platform-admin-only">Settings</a>
             </nav>
@@ -59,6 +60,10 @@
                     <thead><tr><th>Name</th><th>Category</th><th>Version</th><th>Status</th><th></th><th></th></tr></thead>
                     <tbody id="templates-body"><tr><td colspan="4" class="muted">Loading...</td></tr></tbody>
                 </table>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px;">
+                    <span id="templates-page-info" class="muted"></span>
+                    <span id="templates-page-btns"></span>
+                </div>
             </div>
         </div>
 
@@ -123,13 +128,16 @@
 
         let appId = qs("appId");
         let templatesCache = [];
+        let templatesPage = 1;
 
         function selectApp(newAppId) {
             window.location.href = "templates.html?appId=" + encodeURIComponent(newAppId);
         }
 
-        async function loadTemplates() {
-            templatesCache = await tsiCall("/api/v1/templates", "list_templates", { appId });
+        async function loadTemplates(page) {
+            templatesPage = page || 1;
+            const result = await tsiCall("/api/v1/templates", "list_templates", { appId, page: templatesPage, limit: 20 });
+            templatesCache = result.templates;
             const body = document.getElementById("templates-body");
             body.innerHTML = templatesCache.length === 0
                 ? '<tr><td colspan="6" class="muted">No templates yet.</td></tr>'
@@ -142,6 +150,7 @@
                         <td><button class="secondary small" onclick="openPreview('${t.templateId}')">Generate Test Document</button></td>
                         <td><button class="small" onclick="toggleTemplateActive('${t.templateId}', ${t.active})">${t.active ? "Deactivate" : "Activate"}</button></td>
                     </tr>`).join("");
+            renderPagination(result, "templates-page-info", "templates-page-btns", "template", loadTemplates);
         }
 
         async function toggleTemplateActive(templateId, currentlyActive) {
@@ -149,7 +158,7 @@
                 await tsiCall("/api/v1/templates", currentlyActive ? "deactivate_template" : "activate_template", {
                     appId, templateId
                 });
-                await loadTemplates();
+                await loadTemplates(templatesPage);
             } catch (err) {
                 showNotice(notice, err.message);
             }
@@ -210,7 +219,7 @@
 
         (async function init() {
             try {
-                const apps = await tsiCall("/api/v1/admin/apps", "list_apps");
+                const apps = (await tsiCall("/api/v1/admin/apps", "list_apps", { limit: 500 })).apps;
                 if (apps.length === 0) {
                     document.getElementById("empty-state").style.display = "block";
                     document.getElementById("new-template-btn").disabled = true;

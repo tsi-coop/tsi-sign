@@ -51,7 +51,7 @@ public class Apps implements Action {
                     createApp(body, res);
                     return;
                 case "list_apps":
-                    listApps(res, role, userId);
+                    listApps(body, res, role, userId);
                     return;
                 default:
                     // Every remaining func takes an appId and is scoped by read/write RBAC.
@@ -140,28 +140,35 @@ public class Apps implements Action {
             throw e;
         }
 
-        var key = apiKeyRepository.issue(appId);
+        var pair = apiKeyRepository.issue(appId);
 
         ObjectNode json = MAPPER.createObjectNode();
         json.put("appId", appId);
         json.put("appName", appName);
         json.put("appSlug", appSlug);
-        json.put("apiKey", key.rawKey());
+        json.put("apiKey", pair.apiKey());
+        json.put("apiSecret", pair.apiSecret());
+        json.put("warning", "Store the API secret now - it is shown only once and cannot be retrieved again.");
         OutputProcessor.send(res, HttpServletResponse.SC_CREATED, json);
     }
 
-    /** Dashboard/Apps list (§10.1, §10.9): APP_MANAGER sees only their scoped Apps. */
-    private void listApps(HttpServletResponse res, String role, String userId) throws Exception {
+    /** Dashboard/Apps list (§10.1, §10.9): APP_MANAGER sees only their scoped Apps. Paginated. */
+    private void listApps(JsonNode body, HttpServletResponse res, String role, String userId) throws Exception {
         Set<String> scopedAppIds = "APP_MANAGER".equals(role) ? appAdminRepository.listAppIdsForUser(userId) : null;
 
+        InputProcessor.Page paging = InputProcessor.parsePaging(body);
         ArrayNode array = MAPPER.createArrayNode();
-        for (AppRepository.AppRecord app : appRepository.list()) {
-            if (scopedAppIds != null && !scopedAppIds.contains(app.appId())) {
-                continue;
-            }
+        for (AppRepository.AppRecord app : appRepository.list(scopedAppIds, paging.page(), paging.pageSize())) {
             array.add(toJson(app));
         }
-        OutputProcessor.send(res, HttpServletResponse.SC_OK, array);
+        int totalCount = appRepository.count(scopedAppIds);
+        ObjectNode json = MAPPER.createObjectNode();
+        json.set("apps", array);
+        json.put("totalCount", totalCount);
+        json.put("page", paging.page());
+        json.put("pageSize", paging.pageSize());
+        json.put("totalPages", Math.max(1, (totalCount + paging.pageSize() - 1) / paging.pageSize()));
+        OutputProcessor.send(res, HttpServletResponse.SC_OK, json);
     }
 
     private void getApp(HttpServletResponse res, String appId) throws Exception {

@@ -29,6 +29,7 @@ On first start against a fresh Postgres volume, the numbered scripts in `db/` ru
 | `KEYSTORE_TYPE` | `PKCS12` | KeyStore format |
 | `KEYSTORE_PASSWORD` | `changeit` | KeyStore/key password (**change for anything beyond local evaluation**) |
 | `DEFAULT_KEY_ALIAS` | `tsi_corporate_seal` | Fallback keyAlias for `seal_local` when neither the request nor the App's Signing Defaults specify one - lets a fresh install seal with zero per-App setup. Set to an empty string to require every App to configure its own key explicitly. |
+| `JWT_SECRET` | `dev_insecure_jwt_secret_change_in_production` | Signs admin-console session JWTs (§10, matches tsi-compass's `JWTUtil`) - a stateless session that survives a server restart, unlike a plain `HttpSession`. **Change for anything beyond local evaluation**; the app fails fast at first login if unset. |
 | `APP_PORT_MAP` | `8088:8080` | Host:container port mapping |
 | `DB_PORT_MAP` | `5440:5432` | PostgreSQL port mapping |
 
@@ -78,11 +79,12 @@ External client onboarding, multi-party vendor contracts, NDAs, loan agreements,
 
 ## API convention
 
-TSI Sign follows the TSI Coop framework standard shared with `tsi-ledger`, `tsi-dpdp-cms`, and `tsi-privacy-vault`: every `/api/v1/*` call is **POST** with a JSON body carrying a `"_func"` field - never a REST verb or a `{id}` URL segment. A single `InterceptingFilter` resolves auth (an App's `X-API-Key`, or a `platform_user`'s console session) and dispatches to an `Action` class via the `web/WEB-INF/_processor.tsi` registry; the `Action` itself switches on `_func`.
+TSI Sign follows the TSI Coop framework standard shared with `tsi-ledger`, `tsi-dpdp-cms`, and `tsi-privacy-vault`: every `/api/v1/*` call is **POST** with a JSON body carrying a `"_func"` field - never a REST verb or a `{id}` URL segment. A single `InterceptingFilter` resolves auth (an App's `X-API-Key` + `X-API-Secret` pair, or a `platform_user`'s console session) and dispatches to an `Action` class via the `web/WEB-INF/_processor.tsi` registry; the `Action` itself switches on `_func`.
 
 ```bash
 curl -X POST http://localhost:8088/api/v1/templates \
-  -H "X-API-Key: sk_..." \
+  -H "X-API-Key: key_..." \
+  -H "X-API-Secret: sk_..." \
   -d '{"_func":"generate_document","templateId":"...","documentTitle":"Offer.pdf","payloadData":{"name":"Jane"}}'
 ```
 

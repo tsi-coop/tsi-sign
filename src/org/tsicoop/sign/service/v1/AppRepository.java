@@ -9,6 +9,7 @@ import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public class AppRepository {
 
@@ -67,15 +68,35 @@ public class AppRepository {
     }
 
     public List<AppRecord> list() throws Exception {
+        return list(null, 1, Integer.MAX_VALUE);
+    }
+
+    /**
+     * §10.1/§10.2 Apps list, paginated. scopedAppIds restricts to an
+     * APP_MANAGER's assigned Apps (null means no restriction - Platform
+     * Admin/Auditor see every App).
+     */
+    public List<AppRecord> list(Set<String> scopedAppIds, int page, int pageSize) throws Exception {
+        if (scopedAppIds != null && scopedAppIds.isEmpty()) return List.of();
         Connection con = null;
         PreparedStatement ps = null;
         ResultSet rs = null;
         PoolDB pool = new PoolDB();
         try {
             con = pool.getConnection();
-            ps = con.prepareStatement("SELECT app_id, app_name, app_slug, is_active, default_provider_id, " +
+            String sql = "SELECT app_id, app_name, app_slug, is_active, default_provider_id, " +
                     "default_key_alias, webhook_url, rate_limit_rpm, storage_provider_id, created_at::text AS created_at " +
-                    "FROM apps ORDER BY created_at DESC");
+                    "FROM apps" + (scopedAppIds != null ? " WHERE app_id IN (" + placeholders(scopedAppIds.size()) + ")" : "") +
+                    " ORDER BY created_at DESC LIMIT ? OFFSET ?";
+            ps = con.prepareStatement(sql);
+            int i = 1;
+            if (scopedAppIds != null) {
+                for (String appId : scopedAppIds) {
+                    ps.setString(i++, appId);
+                }
+            }
+            ps.setInt(i++, pageSize);
+            ps.setLong(i, (long) (page - 1) * pageSize);
             rs = ps.executeQuery();
             List<AppRecord> apps = new ArrayList<>();
             while (rs.next()) {
@@ -85,6 +106,40 @@ public class AppRepository {
         } finally {
             pool.cleanup(rs, ps, con);
         }
+    }
+
+    public int count(Set<String> scopedAppIds) throws Exception {
+        if (scopedAppIds != null && scopedAppIds.isEmpty()) return 0;
+        Connection con = null;
+        PreparedStatement ps = null;
+        ResultSet rs = null;
+        PoolDB pool = new PoolDB();
+        try {
+            con = pool.getConnection();
+            String sql = "SELECT COUNT(*) FROM apps" +
+                    (scopedAppIds != null ? " WHERE app_id IN (" + placeholders(scopedAppIds.size()) + ")" : "");
+            ps = con.prepareStatement(sql);
+            if (scopedAppIds != null) {
+                int i = 1;
+                for (String appId : scopedAppIds) {
+                    ps.setString(i++, appId);
+                }
+            }
+            rs = ps.executeQuery();
+            rs.next();
+            return rs.getInt(1);
+        } finally {
+            pool.cleanup(rs, ps, con);
+        }
+    }
+
+    private static String placeholders(int count) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < count; i++) {
+            if (i > 0) sb.append(",");
+            sb.append("?::uuid");
+        }
+        return sb.toString();
     }
 
     public Optional<AppRecord> findById(String appId) {

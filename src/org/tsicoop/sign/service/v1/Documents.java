@@ -742,8 +742,11 @@ public class Documents implements Action {
             return;
         }
         boolean includeArchived = body.path("includeArchived").asBoolean(false);
+        String search = body.path("search").asText(null);
+        InputProcessor.Page paging = InputProcessor.parsePaging(body);
         ArrayNode array = MAPPER.createArrayNode();
-        for (DocumentRepository.DocumentSummary doc : documentRepository.listForApp(appId, includeArchived)) {
+        for (DocumentRepository.DocumentSummary doc :
+                documentRepository.listForApp(appId, includeArchived, search, paging.page(), paging.pageSize())) {
             ObjectNode node = array.addObject();
             node.put("documentId", doc.documentId());
             node.put("title", doc.title());
@@ -752,7 +755,14 @@ public class Documents implements Action {
             node.put("createdAt", doc.createdAt());
             node.put("archivedAt", doc.archivedAt());
         }
-        OutputProcessor.send(res, HttpServletResponse.SC_OK, array);
+        int totalCount = documentRepository.countForApp(appId, includeArchived, search);
+        ObjectNode json = MAPPER.createObjectNode();
+        json.set("documents", array);
+        json.put("totalCount", totalCount);
+        json.put("page", paging.page());
+        json.put("pageSize", paging.pageSize());
+        json.put("totalPages", Math.max(1, (totalCount + paging.pageSize() - 1) / paging.pageSize()));
+        OutputProcessor.send(res, HttpServletResponse.SC_OK, json);
     }
 
     /** Archive/unarchive a document. CONSOLE only - freezes it against further seal/eSign activity until unarchived. */

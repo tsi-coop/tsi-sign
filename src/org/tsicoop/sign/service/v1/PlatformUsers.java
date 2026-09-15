@@ -10,6 +10,7 @@ import org.mindrot.jbcrypt.BCrypt;
 import org.tsicoop.sign.framework.Action;
 import org.tsicoop.sign.framework.InputProcessor;
 import org.tsicoop.sign.framework.OutputProcessor;
+import org.tsicoop.sign.framework.RecoveryKeyGenerator;
 
 import java.util.Optional;
 
@@ -17,7 +18,10 @@ import java.util.Optional;
  * §10.7 Platform Users & Roles — PLATFORM_ADMIN only (§10.9): platform_users
  * CRUD and app_admins assignment (which Apps an APP_MANAGER administers).
  * funcs: list_users, create_user, activate_user, deactivate_user,
- * list_user_apps, update_user_app_assignment.
+ * list_user_apps, update_user_app_assignment, set_recovery_key.
+ * set_recovery_key is the "break glass" credential (see PasswordReset,
+ * PUBLIC) - generates a 5-word passphrase for a locked-out user, shown to
+ * the admin once; the user later self-serves a password reset with it.
  */
 public class PlatformUsers implements Action {
 
@@ -54,14 +58,16 @@ public class PlatformUsers implements Action {
                     OutputProcessor.send(res, HttpServletResponse.SC_OK, MAPPER.createObjectNode().put("status", "activated"));
                     break;
                 case "deactivate_user":
-                    userRepository.setActive(requireUserId(body, res), false);
-                    OutputProcessor.send(res, HttpServletResponse.SC_OK, MAPPER.createObjectNode().put("status", "deactivated"));
+                    deactivateUser(req, body, res);
                     break;
                 case "list_user_apps":
                     listUserApps(body, res);
                     break;
                 case "update_user_app_assignment":
                     updateUserAppAssignment(body, res);
+                    break;
+                case "set_recovery_key":
+                    setRecoveryKey(body, res);
                     break;
                 default:
                     OutputProcessor.errorResponse(res, HttpServletResponse.SC_NOT_FOUND, "Not Found", "Unknown _func: " + func);
@@ -73,6 +79,18 @@ public class PlatformUsers implements Action {
 
     private String requireUserId(JsonNode body, HttpServletResponse res) {
         return body.path("userId").asText(null);
+    }
+
+    /** A Platform Admin locking their own only-usable session out would be a self-inflicted lockout - block it. */
+    private void deactivateUser(HttpServletRequest req, JsonNode body, HttpServletResponse res) throws Exception {
+        String userId = requireUserId(body, res);
+        if (userId != null && userId.equals(InputProcessor.getUserId(req))) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request",
+                    "You cannot deactivate your own account.");
+            return;
+        }
+        userRepository.setActive(userId, false);
+        OutputProcessor.send(res, HttpServletResponse.SC_OK, MAPPER.createObjectNode().put("status", "deactivated"));
     }
 
     private void listUsers(HttpServletResponse res) throws Exception {
@@ -145,5 +163,21 @@ public class PlatformUsers implements Action {
             appAdminRepository.unassign(appId, userId);
         }
         OutputProcessor.send(res, HttpServletResponse.SC_OK, MAPPER.createObjectNode().put("status", "updated"));
+    }
+
+    /** Generates and stores a new break-glass recovery-key passphrase for a user; shown to the admin once. */
+    private void setRecoveryKey(JsonNode body, HttpServletResponse res) throws Exception {
+        String userId = body.path("userId").asText(null);
+        if (userId == null || userRepository.findById(userId).isEmpty()) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_NOT_FOUND, "Not Found", "No such platform user.");
+            return;
+        }
+        RecoveryKeyGenerator.GeneratedRecoveryKey recoveryKey = RecoveryKeyGenerator.generate();
+        userRepository.setRecoveryKeyHash(userId, recoveryKey.passphraseHash());
+
+        ObjectNode json = MAPPER.createObjectNode();
+        json.put("passphrase", recoveryKey.passphrase());
+        json.put("warning", "Store this recovery key now - it is shown only once and cannot be retrieved again.");
+        OutputProcessor.send(res, HttpServletResponse.SC_OK, json);
     }
 }

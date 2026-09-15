@@ -18,6 +18,7 @@
                 <a href="templates.html">Templates</a>
                 <a href="documents.html" class="active">Documents</a>
                 <a href="legal-evidence.html">Legal</a>
+                <a href="audit.html">Audit</a>
                 <a href="users.html" class="platform-admin-only">Users</a>
                 <a href="system-settings.html" class="platform-admin-only">Settings</a>
             </nav>
@@ -34,8 +35,13 @@
         </aside>
 
         <main class="main">
-        <p class="subtitle"><a id="back-link" href="documents.html">&larr; Documents</a></p>
-        <h1 id="doc-title">Loading…</h1>
+        <div class="page-head">
+            <div>
+                <p class="subtitle"><a id="back-link" href="documents.html">&larr; Documents</a></p>
+                <h1 id="doc-title">Loading…</h1>
+            </div>
+            <button class="secondary" id="refresh-btn" title="Refresh this page's status without leaving it">&#8635; Refresh</button>
+        </div>
 
         <div id="notice" class="notice error" style="display:none;"></div>
 
@@ -101,7 +107,7 @@
                 <button class="small" onclick="copyText(document.getElementById('esign-gateway-url').textContent, this)">Copy</button>
             </div>
             <div class="modal-actions">
-                <button onclick="closeModal('esign-initiated-modal')">Close</button>
+                <button onclick="closeEsignInitiatedModal()">Close</button>
                 <button class="primary" id="esign-open-gateway-btn">Open Consent Page</button>
             </div>
         </div>
@@ -309,6 +315,34 @@
                 else showNotice(notice, err.message);
             }
         }
+
+        /**
+         * The signer typically goes off to a separate tab to actually complete
+         * eSign (real OTP/biometric, or the mock consent page) and comes back
+         * to close this modal afterward - that's the natural moment to pick up
+         * whatever changed while they were gone, without a manual Refresh.
+         */
+        async function closeEsignInitiatedModal() {
+            closeModal("esign-initiated-modal");
+            try {
+                await load();
+            } catch (err) {
+                showNotice(notice, err.message);
+            }
+        }
+
+        document.getElementById("refresh-btn").addEventListener("click", async () => {
+            const btn = document.getElementById("refresh-btn");
+            btn.disabled = true;
+            showNotice(notice, "");
+            try {
+                await load();
+            } catch (err) {
+                showNotice(notice, err.message);
+            } finally {
+                btn.disabled = false;
+            }
+        });
 
         load().catch(err => showNotice(notice, err.message));
     </script>

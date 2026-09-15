@@ -18,6 +18,7 @@
                 <a href="templates.html">Templates</a>
                 <a href="documents.html">Documents</a>
                 <a href="legal-evidence.html">Legal</a>
+                <a href="audit.html">Audit</a>
                 <a href="users.html" class="active platform-admin-only">Users</a>
                 <a href="system-settings.html" class="platform-admin-only">Settings</a>
             </nav>
@@ -88,6 +89,21 @@
         </div>
     </div>
 
+    <!-- One-time recovery-key reveal -->
+    <div class="modal-overlay" id="recovery-key-modal">
+        <div class="modal">
+            <h2>Recovery Key Set</h2>
+            <p class="modal-sub">This passphrase is shown once - share it with the user through a separate secure channel now. It cannot be retrieved again; only its hash is stored.</p>
+            <div class="key-box">
+                <span id="reveal-recovery-key" style="overflow:hidden;text-overflow:ellipsis"></span>
+                <button class="small" onclick="copyText(document.getElementById('reveal-recovery-key').textContent, this)">Copy</button>
+            </div>
+            <div class="modal-actions">
+                <button class="primary" onclick="closeModal('recovery-key-modal')">I've Shared This Securely</button>
+            </div>
+        </div>
+    </div>
+
     <script src="assets/console.js"></script>
     <script>
         const notice = document.getElementById("notice");
@@ -95,6 +111,7 @@
 
         let usersCache = [];
         let appsCache = [];
+        let currentUserId = null;
 
         async function loadUsers() {
             usersCache = await tsiCall("/api/v1/admin/platform-users", "list_users", {});
@@ -152,9 +169,17 @@
 
                 <div class="section-gap" style="margin-top:16px;">
                     <h2 style="font-size:0.95rem; margin-bottom:6px;">Status</h2>
-                    ${user.isActive
-                        ? `<button class="danger" onclick="deactivate('${userId}')">Deactivate</button>`
-                        : `<button class="secondary" onclick="activate('${userId}')">Activate</button>`}
+                    ${userId === currentUserId
+                        ? `<p class="hint">This is your own account - you can't deactivate it while signed in as yourself.</p>`
+                        : user.isActive
+                            ? `<button class="danger" onclick="deactivate('${userId}')">Deactivate</button>`
+                            : `<button class="secondary" onclick="activate('${userId}')">Activate</button>`}
+                </div>
+
+                <div class="section-gap" style="margin-top:16px;">
+                    <h2 style="font-size:0.95rem; margin-bottom:6px;">Break-Glass Recovery Key</h2>
+                    <p class="hint">Generates a one-time-shown passphrase this user can use to self-reset their password if locked out. Setting a new key replaces the old one.</p>
+                    <button class="secondary" onclick="setRecoveryKey('${userId}')">Set Recovery Key</button>
                 </div>
             `;
 
@@ -162,7 +187,7 @@
 
             if (isAppManager) {
                 if (appsCache.length === 0) {
-                    appsCache = await tsiCall("/api/v1/admin/apps", "list_apps", {});
+                    appsCache = (await tsiCall("/api/v1/admin/apps", "list_apps", { limit: 500 })).apps;
                 }
                 const assigned = new Set(await tsiCall("/api/v1/admin/platform-users", "list_user_apps", { userId }));
                 document.getElementById("permissions-checkboxes").innerHTML = appsCache.map(a => `
@@ -206,6 +231,18 @@
             }
         }
 
+        async function setRecoveryKey(userId) {
+            try {
+                const result = await tsiCall("/api/v1/admin/platform-users", "set_recovery_key", { userId });
+                document.getElementById("reveal-recovery-key").textContent = result.passphrase;
+                closeModal("manage-modal");
+                openModal("recovery-key-modal");
+            } catch (err) {
+                showNotice(notice, err.message);
+            }
+        }
+
+        tsiCall("/api/v1/admin/auth", "me", {}).then(me => { currentUserId = me.userId; }).catch(() => {});
         loadUsers().catch(err => showNotice(notice, err.message));
     </script>
 </body>
