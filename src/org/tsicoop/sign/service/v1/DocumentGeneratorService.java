@@ -17,5 +17,5 @@ public interface DocumentGeneratorService {
      * @param htmlTemplate raw HTML/CSS source containing {{field}} placeholders
      * @param payloadData  key-value pairs to populate inside the template
      */
-    DocumentGenerationResult generatePdf(String htmlTemplate, Map<String, Object> payloadData);
+    DocumentGenerationResult generatePdf(String htmlTemplate, Map<String, Object> payloadData) throws TemplateRenderException;
 }
