@@ -1,0 +1,12 @@
+-- Per-user recovery-key passphrase - a "break glass" password reset for a
+-- locked-out platform user. This replicates the pattern actually working
+-- in tsi-compass (Platform.setRecoveryKey + Operator's verify_recovery_key
+-- / reset_password_via_recovery) - NOT that repo's platform-breakglass.html
+-- page, which describes a single global master key but was never wired to
+-- any backend there.
+--
+-- recovery_key_hash is a SHA-256 hex digest of a 5-word passphrase (see
+-- RecoveryKeyGenerator); NULL until a Platform Admin sets one for a user.
+-- Not single-use, matching tsi-compass: the same passphrase stays valid
+-- until another set_recovery_key call replaces it.
+ALTER TABLE platform_users ADD COLUMN recovery_key_hash CHAR(64);

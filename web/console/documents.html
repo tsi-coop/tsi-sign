@@ -18,6 +18,7 @@
                 <a href="templates.html">Templates</a>
                 <a href="documents.html" class="active">Documents</a>
                 <a href="legal-evidence.html">Legal</a>
+                <a href="audit.html">Audit</a>
                 <a href="users.html" class="platform-admin-only">Users</a>
                 <a href="system-settings.html" class="platform-admin-only">Settings</a>
             </nav>
@@ -51,6 +52,10 @@
                     <select id="app-select"></select>
                 </div>
                 <div>
+                    <label>Search</label>
+                    <input type="search" id="search-input" placeholder="Search by title...">
+                </div>
+                <div>
                     <label>&nbsp;</label>
                     <label style="font-weight:normal;"><input type="checkbox" id="show-archived-checkbox"> Show archived</label>
                 </div>
@@ -63,6 +68,10 @@
                     <thead><tr><th>Title</th><th>Template</th><th>Status</th><th>Created</th><th></th></tr></thead>
                     <tbody id="documents-body"><tr><td colspan="5" class="muted">Loading...</td></tr></tbody>
                 </table>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px;">
+                    <span id="documents-page-info" class="muted"></span>
+                    <span id="documents-page-btns"></span>
+                </div>
             </div>
         </div>
 
@@ -105,7 +114,7 @@
         }
 
         async function loadTemplatesForSelect() {
-            templatesCache = await tsiCall("/api/v1/templates", "list_templates", { appId });
+            templatesCache = (await tsiCall("/api/v1/templates", "list_templates", { appId, limit: 500 })).templates;
             const activeTemplates = templatesCache.filter(t => t.active);
             const select = document.getElementById("gen-doc-template");
             select.innerHTML = activeTemplates.length === 0
@@ -113,13 +122,19 @@
                 : activeTemplates.map(t => `<option value="${escapeHtml(t.templateId)}">${escapeHtml(t.templateName)}</option>`).join("");
         }
 
-        async function loadDocuments() {
+        let documentsPage = 1;
+
+        async function loadDocuments(page) {
+            documentsPage = page || 1;
             const includeArchived = document.getElementById("show-archived-checkbox").checked;
-            const documents = await tsiCall("/api/v1/documents", "list_documents", { appId, includeArchived });
+            const search = document.getElementById("search-input").value.trim();
+            const result = await tsiCall("/api/v1/documents", "list_documents", {
+                appId, includeArchived, search: search || undefined, page: documentsPage, limit: 20
+            });
             const body = document.getElementById("documents-body");
-            body.innerHTML = documents.length === 0
+            body.innerHTML = result.documents.length === 0
                 ? '<tr><td colspan="5" class="muted">No documents yet.</td></tr>'
-                : documents.map(d => `
+                : result.documents.map(d => `
                     <tr>
                         <td><a href="document-detail.html?appId=${encodeURIComponent(appId)}&documentId=${encodeURIComponent(d.documentId)}">${escapeHtml(d.title)}</a>${d.archivedAt ? ' <span class="badge inactive">Archived</span>' : ""}</td>
                         <td>${escapeHtml(d.templateName) || '<span class="muted">-</span>'}</td>
@@ -127,6 +142,7 @@
                         <td class="muted">${escapeHtml(d.createdAt)}</td>
                         <td><button class="small" onclick="toggleDocumentArchived('${d.documentId}', ${!!d.archivedAt})">${d.archivedAt ? "Unarchive" : "Archive"}</button></td>
                     </tr>`).join("");
+            renderPagination(result, "documents-page-info", "documents-page-btns", "document", loadDocuments);
         }
 
         async function toggleDocumentArchived(documentId, currentlyArchived) {
@@ -134,14 +150,22 @@
                 await tsiCall("/api/v1/documents", currentlyArchived ? "unarchive_document" : "archive_document", {
                     appId, documentId
                 });
-                await loadDocuments();
+                await loadDocuments(documentsPage);
             } catch (err) {
                 showNotice(notice, err.message);
             }
         }
 
         document.getElementById("show-archived-checkbox").addEventListener("change", () => {
-            loadDocuments().catch(err => showNotice(notice, err.message));
+            loadDocuments(1).catch(err => showNotice(notice, err.message));
+        });
+
+        let searchDebounce = null;
+        document.getElementById("search-input").addEventListener("input", () => {
+            clearTimeout(searchDebounce);
+            searchDebounce = setTimeout(() => {
+                loadDocuments(1).catch(err => showNotice(notice, err.message));
+            }, 300);
         });
 
         document.getElementById("new-document-btn").addEventListener("click", () => {
@@ -179,7 +203,7 @@
 
         (async function init() {
             try {
-                const apps = await tsiCall("/api/v1/admin/apps", "list_apps");
+                const apps = (await tsiCall("/api/v1/admin/apps", "list_apps", { limit: 500 })).apps;
                 if (apps.length === 0) {
                     document.getElementById("empty-state").style.display = "block";
                     document.getElementById("new-document-btn").disabled = true;

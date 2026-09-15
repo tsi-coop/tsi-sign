@@ -14,7 +14,9 @@
 /api/v1/esign/callback=org.tsicoop.sign.service.v1.EsignCallback|PUBLIC
 /api/v1/admin/setup=org.tsicoop.sign.service.v1.Setup|PUBLIC
 /api/v1/admin/auth=org.tsicoop.sign.service.v1.Auth|PUBLIC
+/api/v1/admin/password-reset=org.tsicoop.sign.service.v1.PasswordReset|PUBLIC
 /api/v1/admin/apps=org.tsicoop.sign.service.v1.Apps|CONSOLE
+/api/v1/admin/audit-logs=org.tsicoop.sign.service.v1.AuditLogs|CONSOLE
 /api/v1/admin/keys=org.tsicoop.sign.service.v1.Keys|CONSOLE
 /api/v1/admin/legal-certificates=org.tsicoop.sign.service.v1.LegalCertificates|CONSOLE
 /api/v1/admin/platform-users=org.tsicoop.sign.service.v1.PlatformUsers|CONSOLE

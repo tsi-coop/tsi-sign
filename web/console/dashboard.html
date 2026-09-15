@@ -18,6 +18,7 @@
                 <a href="templates.html">Templates</a>
                 <a href="documents.html">Documents</a>
                 <a href="legal-evidence.html">Legal</a>
+                <a href="audit.html">Audit</a>
                 <a href="users.html" class="platform-admin-only">Users</a>
                 <a href="system-settings.html" class="platform-admin-only">Settings</a>
             </nav>
@@ -75,8 +76,7 @@
             }
 
             try {
-                const apps = await tsiCall("/api/v1/admin/apps", "list_apps");
-                const recent = apps.slice(0, 8);
+                const recent = (await tsiCall("/api/v1/admin/apps", "list_apps", { page: 1, limit: 8 })).apps;
                 document.getElementById("recent-apps-body").innerHTML = recent.length === 0
                     ? '<tr><td colspan="4" class="muted">No Apps yet.</td></tr>'
                     : recent.map(a => `

@@ -225,8 +225,9 @@ public class Templates implements Action {
             OutputProcessor.errorResponse(res, HttpServletResponse.SC_NOT_FOUND, "Not Found", "No such App.");
             return;
         }
+        InputProcessor.Page paging = InputProcessor.parsePaging(body);
         ArrayNode array = MAPPER.createArrayNode();
-        for (TemplateRepository.TemplateRecord template : templateRepository.listForApp(appId)) {
+        for (TemplateRepository.TemplateRecord template : templateRepository.listForApp(appId, paging.page(), paging.pageSize())) {
             ObjectNode node = array.addObject();
             node.put("templateId", template.templateId());
             node.put("templateName", template.templateName());
@@ -235,7 +236,14 @@ public class Templates implements Action {
             node.put("version", template.version());
             node.put("active", template.active());
         }
-        OutputProcessor.send(res, HttpServletResponse.SC_OK, array);
+        int totalCount = templateRepository.countForApp(appId);
+        ObjectNode json = MAPPER.createObjectNode();
+        json.set("templates", array);
+        json.put("totalCount", totalCount);
+        json.put("page", paging.page());
+        json.put("pageSize", paging.pageSize());
+        json.put("totalPages", Math.max(1, (totalCount + paging.pageSize() - 1) / paging.pageSize()));
+        OutputProcessor.send(res, HttpServletResponse.SC_OK, json);
     }
 
     /**

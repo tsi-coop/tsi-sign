@@ -5,18 +5,25 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.http.HttpSession;
 import org.mindrot.jbcrypt.BCrypt;
 import org.tsicoop.sign.framework.Action;
 import org.tsicoop.sign.framework.InputProcessor;
+import org.tsicoop.sign.framework.JWTUtil;
 import org.tsicoop.sign.framework.OutputProcessor;
+import org.tsicoop.sign.framework.TokenBlocklist;
 
 import java.util.Optional;
 
 /**
  * PUBLIC at the filter (§6) — login is genuinely public; logout/me self-gate
- * on "is there a session" internally, same as Ledger's Auth service.
- * funcs: login, logout, me.
+ * on "is there a valid session token" internally, same as Ledger's Auth
+ * service. funcs: login, logout, me.
+ *
+ * Console sessions are stateless JWTs (JWTUtil, matches tsi-compass), not a
+ * server-side HttpSession - a server restart doesn't force every logged-in
+ * user to sign in again, since nothing about the session lives in server
+ * memory. Trade-off: logout revokes via an in-memory jti blocklist
+ * (TokenBlocklist), which itself doesn't survive a restart either.
  */
 public class Auth implements Action {
 
@@ -63,19 +70,21 @@ public class Auth implements Action {
         }
 
         PlatformUserRepository.PlatformUserRecord user = userOpt.get();
-        HttpSession session = req.getSession(true);
-        session.setAttribute(InputProcessor.SESSION_USER_ID, user.userId());
-        session.setAttribute(InputProcessor.SESSION_USER_ROLE, user.role());
-        session.setAttribute(InputProcessor.SESSION_USER_EMAIL, user.email());
-        session.setAttribute(InputProcessor.SESSION_USER_NAME, user.fullName());
+        String token = JWTUtil.generateToken(user.userId(), user.email(), user.fullName(), user.role());
 
-        OutputProcessor.send(res, HttpServletResponse.SC_OK, userJson(user));
+        ObjectNode json = userJson(user);
+        json.put("token", token);
+        OutputProcessor.send(res, HttpServletResponse.SC_OK, json);
     }
 
+    /** Revokes the presented token's jti so it can't be reused, even though it hasn't naturally expired yet. */
     private void logout(HttpServletRequest req, HttpServletResponse res) {
-        HttpSession session = req.getSession(false);
-        if (session != null) {
-            session.invalidate();
+        String token = InputProcessor.extractBearerToken(req);
+        if (JWTUtil.isTokenValid(token)) {
+            String jti = JWTUtil.getJtiFromToken(token);
+            if (jti != null) {
+                TokenBlocklist.revoke(jti, JWTUtil.getExpiryFromToken(token).getTime());
+            }
         }
         OutputProcessor.send(res, HttpServletResponse.SC_OK, MAPPER.createObjectNode());
     }
@@ -85,12 +94,11 @@ public class Auth implements Action {
             OutputProcessor.errorResponse(res, HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized", "Not logged in.");
             return;
         }
-        HttpSession session = req.getSession(false);
         ObjectNode json = MAPPER.createObjectNode();
-        json.put("userId", (String) session.getAttribute(InputProcessor.SESSION_USER_ID));
-        json.put("email", (String) session.getAttribute(InputProcessor.SESSION_USER_EMAIL));
-        json.put("fullName", (String) session.getAttribute(InputProcessor.SESSION_USER_NAME));
-        json.put("role", (String) session.getAttribute(InputProcessor.SESSION_USER_ROLE));
+        json.put("userId", InputProcessor.getUserId(req));
+        json.put("email", InputProcessor.getUserEmail(req));
+        json.put("fullName", InputProcessor.getUserFullName(req));
+        json.put("role", InputProcessor.getUserRole(req));
         OutputProcessor.send(res, HttpServletResponse.SC_OK, json);
     }
 

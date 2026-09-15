@@ -18,6 +18,7 @@
                 <a href="templates.html">Templates</a>
                 <a href="documents.html">Documents</a>
                 <a href="legal-evidence.html">Legal</a>
+                <a href="audit.html">Audit</a>
                 <a href="users.html" class="platform-admin-only">Users</a>
                 <a href="system-settings.html" class="platform-admin-only">Settings</a>
             </nav>
@@ -49,6 +50,10 @@
                 <thead><tr><th>Name</th><th>Slug</th><th>Status</th><th>Default Provider</th><th>Created</th></tr></thead>
                 <tbody id="apps-body"><tr><td colspan="5" class="muted">Loading...</td></tr></tbody>
             </table>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px;">
+                <span id="apps-page-info" class="muted"></span>
+                <span id="apps-page-btns"></span>
+            </div>
         </div>
         </main>
     </div>
@@ -97,11 +102,16 @@
             </div>
 
             <div class="wizard-panel" data-step="done">
-                <p>App created. Here is its API key - store it now, it cannot be retrieved again.</p>
+                <p>App created. Here is its API key and secret - store the secret now, it cannot be retrieved again.</p>
                 <label>API Key</label>
                 <div class="key-box">
                     <span id="wizard-api-key" style="overflow:hidden;text-overflow:ellipsis"></span>
                     <button class="small" onclick="copyText(document.getElementById('wizard-api-key').textContent, this)">Copy</button>
+                </div>
+                <label>API Secret</label>
+                <div class="key-box">
+                    <span id="wizard-api-secret" style="overflow:hidden;text-overflow:ellipsis"></span>
+                    <button class="small" onclick="copyText(document.getElementById('wizard-api-secret').textContent, this)">Copy</button>
                 </div>
                 <div class="modal-actions">
                     <button type="button" onclick="closeModal('wizard-modal')">Done</button>
@@ -116,13 +126,16 @@
         const notice = document.getElementById("notice");
         loadTopbar();
 
-        async function loadApps() {
+        let appsPage = 1;
+
+        async function loadApps(page) {
+            appsPage = page || 1;
             try {
-                const apps = await tsiCall("/api/v1/admin/apps", "list_apps");
+                const result = await tsiCall("/api/v1/admin/apps", "list_apps", { page: appsPage, limit: 20 });
                 const body = document.getElementById("apps-body");
-                body.innerHTML = apps.length === 0
+                body.innerHTML = result.apps.length === 0
                     ? '<tr><td colspan="5" class="muted">No Apps yet.</td></tr>'
-                    : apps.map(a => `
+                    : result.apps.map(a => `
                         <tr>
                             <td><a href="app-detail.html?appId=${encodeURIComponent(a.appId)}">${escapeHtml(a.appName)}</a></td>
                             <td>${escapeHtml(a.appSlug)}</td>
@@ -131,6 +144,7 @@
                             <td class="muted">${escapeHtml(a.createdAt)}</td>
                         </tr>
                     `).join("");
+                renderPagination(result, "apps-page-info", "apps-page-btns", "App", loadApps);
             } catch (err) {
                 showNotice(notice, err.message);
             }
@@ -204,6 +218,7 @@
                 });
                 wizardCreatedAppId = result.appId;
                 document.getElementById("wizard-api-key").textContent = result.apiKey;
+                document.getElementById("wizard-api-secret").textContent = result.apiSecret;
                 document.getElementById("wizard-goto-app-btn").onclick = () => {
                     window.location.href = "app-detail.html?appId=" + encodeURIComponent(wizardCreatedAppId);
                 };

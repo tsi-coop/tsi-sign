@@ -6,11 +6,20 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.tsicoop.sign.framework.ApiKeyGenerator;
 import org.tsicoop.sign.framework.Action;
 import org.tsicoop.sign.framework.InputProcessor;
 import org.tsicoop.sign.framework.OutputProcessor;
 
-/** §10.2 API Keys tab, RBAC-scoped per §10.9. funcs: list_keys, issue_key, revoke_key. */
+import java.util.Optional;
+
+/**
+ * §10.2 API Keys tab, RBAC-scoped per §10.9. funcs: list_keys, issue_key,
+ * rotate_key, revoke_key. Key+secret pair pattern shared across the TSI
+ * stack (tsi-ledger's App.java is the canonical reference) - api_key is a
+ * non-secret identifier always listable; api_secret is shown exactly once,
+ * on issue or rotate, and never stored or returned again.
+ */
 public class Keys implements Action {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -53,6 +62,13 @@ public class Keys implements Action {
                     }
                     issueKey(res, appId);
                     break;
+                case "rotate_key":
+                    if (!authorizationService.canWrite(role, userId, appId)) {
+                        OutputProcessor.errorResponse(res, HttpServletResponse.SC_FORBIDDEN, "Forbidden", "You do not have write access to this App.");
+                        return;
+                    }
+                    rotateKey(body, res, appId);
+                    break;
                 case "revoke_key":
                     if (!authorizationService.canWrite(role, userId, appId)) {
                         OutputProcessor.errorResponse(res, HttpServletResponse.SC_FORBIDDEN, "Forbidden", "You do not have write access to this App.");
@@ -77,7 +93,7 @@ public class Keys implements Action {
         for (ApiKeyRepository.ApiKeyRecord key : apiKeyRepository.listForApp(appId)) {
             ObjectNode node = array.addObject();
             node.put("keyId", key.keyId());
-            node.put("keyPrefix", key.keyPrefix());
+            node.put("apiKey", key.apiKey());
             node.put("isActive", key.isActive());
             node.put("createdAt", key.createdAt());
             node.put("revokedAt", key.revokedAt());
@@ -90,11 +106,22 @@ public class Keys implements Action {
             OutputProcessor.errorResponse(res, HttpServletResponse.SC_NOT_FOUND, "Not Found", "No such App.");
             return;
         }
-        var key = apiKeyRepository.issue(appId);
-        ObjectNode json = MAPPER.createObjectNode();
-        json.put("apiKey", key.rawKey());
-        json.put("keyPrefix", key.keyPrefix());
-        OutputProcessor.send(res, HttpServletResponse.SC_CREATED, json);
+        ApiKeyGenerator.GeneratedKeyPair pair = apiKeyRepository.issue(appId);
+        OutputProcessor.send(res, HttpServletResponse.SC_CREATED, keyPairJson(pair.apiKey(), pair.apiSecret()));
+    }
+
+    private void rotateKey(JsonNode body, HttpServletResponse res, String appId) throws Exception {
+        String keyId = body.path("keyId").asText(null);
+        if (keyId == null) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request", "keyId is required.");
+            return;
+        }
+        Optional<ApiKeyGenerator.GeneratedKeyPair> rotated = apiKeyRepository.rotate(appId, keyId);
+        if (rotated.isEmpty()) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_NOT_FOUND, "Not Found", "No such active key for this App.");
+            return;
+        }
+        OutputProcessor.send(res, HttpServletResponse.SC_OK, keyPairJson(rotated.get().apiKey(), rotated.get().apiSecret()));
     }
 
     private void revokeKey(JsonNode body, HttpServletResponse res, String appId) throws Exception {
@@ -109,5 +136,14 @@ public class Keys implements Action {
             return;
         }
         OutputProcessor.send(res, HttpServletResponse.SC_OK, MAPPER.createObjectNode().put("status", "revoked"));
+    }
+
+    /** apiSecret is returned only here (issue/rotate) - shown once, never retrievable again. */
+    private ObjectNode keyPairJson(String apiKey, String apiSecret) {
+        ObjectNode json = MAPPER.createObjectNode();
+        json.put("apiKey", apiKey);
+        json.put("apiSecret", apiSecret);
+        json.put("warning", "Store the API secret now - it is shown only once and cannot be retrieved again.");
+        return json;
     }
 }

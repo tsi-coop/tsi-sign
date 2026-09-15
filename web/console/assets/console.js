@@ -2,10 +2,39 @@
 // tsi-ledger/tsi-dpdp-cms/tsi-privacy-vault): every call is POST to a fixed
 // resource path with "_func" + params in the JSON body - no REST verbs, no
 // {id} path segments. No build step, plain fetch + DOM.
+//
+// Console sessions are a JWT (matches tsi-compass), stored in localStorage
+// and sent as "Authorization: Bearer <token>" - not a session cookie - so
+// the session survives a server restart (the token carries the session,
+// the server holds no state for it).
+
+function getAuthToken() {
+    try {
+        return localStorage.getItem("token");
+    } catch (e) {
+        return null;
+    }
+}
+
+function setAuthToken(token) {
+    try {
+        localStorage.setItem("token", token);
+    } catch (e) { /* private-browsing storage denial - session just won't persist across reloads */ }
+}
+
+function clearAuthToken() {
+    try {
+        localStorage.removeItem("token");
+    } catch (e) { }
+}
 
 async function apiFetch(path, options, skipAuthRedirect) {
-    const res = await fetch(path, Object.assign({ headers: { "Content-Type": "application/json" } }, options));
+    const headers = Object.assign({ "Content-Type": "application/json" }, options && options.headers);
+    const token = getAuthToken();
+    if (token) headers["Authorization"] = "Bearer " + token;
+    const res = await fetch(path, Object.assign({}, options, { headers }));
     if (res.status === 401 && !skipAuthRedirect) {
+        clearAuthToken();
         window.location.href = "login.html";
         throw new Error("Not logged in");
     }
@@ -124,6 +153,38 @@ async function loadTopbar() {
 }
 
 async function logout() {
-    await tsiCall("/api/v1/admin/auth", "logout", {}, true);
-    window.location.href = "login.html";
+    try {
+        await tsiCall("/api/v1/admin/auth", "logout", {}, true);
+    } finally {
+        clearAuthToken();
+        window.location.href = "login.html";
+    }
+}
+
+/* ---------- Shared pagination (page/pageSize/totalCount/totalPages response shape) ---------- */
+
+/** Renders "Showing X-Y of Z" + Prev/Next into infoId/btnsId; loadFn(page) is called to fetch a page. */
+function renderPagination(result, infoId, btnsId, noun, loadFn) {
+    const infoEl = document.getElementById(infoId);
+    const btnsEl = document.getElementById(btnsId);
+    if (!infoEl || !btnsEl) return;
+    const total = result.totalCount || 0;
+    const page = result.page || 1;
+    const pageSize = result.pageSize || 20;
+    const totalPages = result.totalPages || 1;
+    const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
+    const to = Math.min(page * pageSize, total);
+    infoEl.textContent = total === 0 ? `No ${noun}s.` : `Showing ${from}–${to} of ${total} ${noun}${total !== 1 ? "s" : ""}`;
+
+    if (totalPages <= 1) {
+        btnsEl.innerHTML = "";
+        return;
+    }
+    let html = `<button class="secondary small" ${page <= 1 ? "disabled" : ""} data-page="${page - 1}">Prev</button>`;
+    html += ` <span class="muted" style="margin:0 8px;">Page ${page} of ${totalPages}</span> `;
+    html += `<button class="secondary small" ${page >= totalPages ? "disabled" : ""} data-page="${page + 1}">Next</button>`;
+    btnsEl.innerHTML = html;
+    btnsEl.querySelectorAll("[data-page]").forEach(btn => {
+        btn.addEventListener("click", () => loadFn(parseInt(btn.dataset.page, 10)));
+    });
 }

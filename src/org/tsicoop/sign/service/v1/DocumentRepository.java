@@ -287,12 +287,17 @@ public class DocumentRepository {
     }
 
     /**
-     * §10.4 Documents & Audit Trail list, scoped to one App. Archived
-     * documents are excluded by default - the console's normal list is
-     * meant to stay uncluttered by what's been put away; includeArchived
-     * powers an explicit "show archived" view instead.
+     * §10.4 Documents & Audit Trail list, scoped to one App, paginated and
+     * optionally search-filtered. Archived documents are excluded by
+     * default - the console's normal list is meant to stay uncluttered by
+     * what's been put away; includeArchived powers an explicit "show
+     * archived" view instead. search does a case-insensitive ILIKE match
+     * against the document title, matching tsi-compass's list_controls
+     * search convention (no full-text tsvector index - not warranted at
+     * this scale, and not how any sibling TSI product does it either).
      */
-    public List<DocumentSummary> listForApp(String appId, boolean includeArchived) throws Exception {
+    public List<DocumentSummary> listForApp(String appId, boolean includeArchived, String search,
+                                             int page, int pageSize) throws Exception {
         Connection con = null;
         PreparedStatement ps = null;
         ResultSet rs = null;
@@ -303,9 +308,16 @@ public class DocumentRepository {
                     "d.created_at::text AS created_at, d.archived_at::text AS archived_at FROM documents d " +
                     "LEFT JOIN templates t ON t.template_id = d.template_id " +
                     "WHERE d.app_id = ?::uuid" + (includeArchived ? "" : " AND d.archived_at IS NULL") +
-                    " ORDER BY d.created_at DESC";
+                    (search != null && !search.isBlank() ? " AND d.title ILIKE ?" : "") +
+                    " ORDER BY d.created_at DESC LIMIT ? OFFSET ?";
             ps = con.prepareStatement(sql);
-            ps.setString(1, appId);
+            int i = 1;
+            ps.setString(i++, appId);
+            if (search != null && !search.isBlank()) {
+                ps.setString(i++, "%" + search + "%");
+            }
+            ps.setInt(i++, pageSize);
+            ps.setLong(i, (long) (page - 1) * pageSize);
             rs = ps.executeQuery();
             List<DocumentSummary> documents = new ArrayList<>();
             while (rs.next()) {
@@ -314,6 +326,30 @@ public class DocumentRepository {
                         rs.getString("status"), rs.getString("created_at"), rs.getString("archived_at")));
             }
             return documents;
+        } finally {
+            pool.cleanup(rs, ps, con);
+        }
+    }
+
+    public int countForApp(String appId, boolean includeArchived, String search) throws Exception {
+        Connection con = null;
+        PreparedStatement ps = null;
+        ResultSet rs = null;
+        PoolDB pool = new PoolDB();
+        try {
+            con = pool.getConnection();
+            String sql = "SELECT COUNT(*) FROM documents d WHERE d.app_id = ?::uuid" +
+                    (includeArchived ? "" : " AND d.archived_at IS NULL") +
+                    (search != null && !search.isBlank() ? " AND d.title ILIKE ?" : "");
+            ps = con.prepareStatement(sql);
+            int i = 1;
+            ps.setString(i++, appId);
+            if (search != null && !search.isBlank()) {
+                ps.setString(i, "%" + search + "%");
+            }
+            rs = ps.executeQuery();
+            rs.next();
+            return rs.getInt(1);
         } finally {
             pool.cleanup(rs, ps, con);
         }

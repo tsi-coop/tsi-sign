@@ -41,18 +41,19 @@ public class SeedApp {
                 }
             }
 
-            ApiKeyGenerator.GeneratedKey key = ApiKeyGenerator.generate();
+            ApiKeyGenerator.GeneratedKeyPair pair = ApiKeyGenerator.generate();
             try (PreparedStatement ps = con.prepareStatement(
-                    "INSERT INTO api_keys (app_id, key_hash, key_prefix) VALUES (?::uuid, ?, ?)")) {
+                    "INSERT INTO api_keys (app_id, api_key, api_secret_hash) VALUES (?::uuid, ?, ?)")) {
                 ps.setString(1, appId);
-                ps.setString(2, key.keyHash());
-                ps.setString(3, key.keyPrefix());
+                ps.setString(2, pair.apiKey());
+                ps.setString(3, pair.apiSecretHash());
                 ps.executeUpdate();
             }
 
             System.out.println("Seeded App: " + appName + " (" + appSlug + ")");
-            System.out.println("  app_id  = " + appId);
-            System.out.println("  API key = " + key.rawKey() + "   (shown once — store it now)");
+            System.out.println("  app_id     = " + appId);
+            System.out.println("  API key    = " + pair.apiKey() + "   (send as X-API-Key)");
+            System.out.println("  API secret = " + pair.apiSecret() + "   (shown once — store it now; send as X-API-Secret)");
         }
     }
 }

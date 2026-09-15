@@ -52,6 +52,8 @@ services:
       KEYSTORE_TYPE: "${KEYSTORE_TYPE:-PKCS12}"
       KEYSTORE_PASSWORD: "${KEYSTORE_PASSWORD:-changeit}"
       DEFAULT_KEY_ALIAS: "${DEFAULT_KEY_ALIAS:-tsi_corporate_seal}"
+      # Signs admin-console session JWTs (§10) - override via .env for any real deployment.
+      JWT_SECRET: "${JWT_SECRET:-dev_insecure_jwt_secret_change_in_production}"
     volumes:
       - sign_documents:/data/tsi-sign/documents
     depends_on:
