@@ -1,0 +1,21 @@
+{
+  "agreement_date": "15 September 2026",
+  "lender_name": "Northbridge Finance Private Limited",
+  "lender_address": "3rd Floor, Raheja Towers, MG Road, Bengaluru, Karnataka 560001",
+  "lender_cin": "U65929KA2015PTC082345",
+  "borrower_name": "Rohan Mehta",
+  "borrower_address": "14, Lakeview Society, Kothrud, Pune, Maharashtra 411038",
+  "borrower_pan": "ABCDE1234F",
+  "principal_amount": "Rs. 5,00,000",
+  "interest_rate": "12.5% per annum (reducing balance)",
+  "tenure_months": "24",
+  "emi_amount": "Rs. 23,537",
+  "disbursement_date": "20 September 2026",
+  "first_emi_date": "5 October 2026",
+  "jurisdiction_city": "Bengaluru, Karnataka",
+  "installments": [
+    { "number": "1", "due_date": "5 October 2026", "amount": "Rs. 23,537" },
+    { "number": "2", "due_date": "5 November 2026", "amount": "Rs. 23,537" },
+    { "number": "3", "due_date": "5 December 2026", "amount": "Rs. 23,537" }
+  ]
+}

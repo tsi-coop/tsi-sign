@@ -1,0 +1,14 @@
+{
+  "agreement_date": "15 September 2026",
+  "client_name": "Suryoday Innovations Private Limited",
+  "client_address": "4th Floor, Prestige Tech Park, Kadubeesanahalli, Bengaluru, Karnataka 560103",
+  "consultant_name": "Meridian Analytics LLP",
+  "consultant_address": "212, DLF Cyber City, Phase II, Gurugram, Haryana 122002",
+  "consultant_gstin": "06AAECM1234F1Z5",
+  "service_description": "The Consultant shall provide strategic advisory and technical architecture review services for the Client's payments platform migration project.",
+  "fee_amount": "Rs. 9,00,000 per month, plus applicable GST",
+  "payment_terms": "Net 15, invoiced monthly in arrears",
+  "start_date": "1 October 2026",
+  "end_date": "31 March 2027",
+  "jurisdiction_city": "Bengaluru, Karnataka"
+}

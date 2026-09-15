@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+<!--
+  Experience Certificate
+  Single-signer example (company/HR authorized signatory).
+  Payload: examples/payloads/experience-certificate.json
+-->
+<style>
+  @page { size: A4; margin: 25mm 20mm; }
+  body { font-family: 'Times New Roman', Georgia, serif; font-size: 12pt; color: #1a1a1a; line-height: 1.6; }
+  .letterhead { text-align: center; border-bottom: 2px solid #1a3d6d; padding-bottom: 10px; margin-bottom: 30px; }
+  .letterhead .company { font-size: 18pt; font-weight: bold; color: #1a3d6d; letter-spacing: 1px; }
+  .letterhead .address { font-size: 10pt; color: #555; margin-top: 4px; }
+  .letterhead .doc-title { font-size: 14pt; margin-top: 14px; text-transform: uppercase; letter-spacing: 2px; text-decoration: underline; }
+  .ref-line { text-align: right; font-size: 10.5pt; color: #555; margin-bottom: 20px; }
+  p { text-align: justify; margin: 10px 0; }
+  .sig-block { margin-top: 60px; }
+  .sig-role { font-weight: bold; margin-bottom: 46px; }
+  .sig-line { border-top: 1px solid #333; padding-top: 4px; width: 260px; }
+  .sig-marker { color: #ffffff; font-size: 1px; }
+</style>
+</head>
+<body>
+  <div class="letterhead">
+    <div class="company">{{company_name}}</div>
+    <div class="address">{{company_address}}</div>
+    <div class="doc-title">Experience Certificate</div>
+  </div>
+
+  <div class="ref-line">Date of Issue: {{issue_date}}</div>
+
+  <p>TO WHOMSOEVER IT MAY CONCERN</p>
+
+  <p>This is to certify that <strong>{{employee_name}}</strong> (Employee ID: {{employee_id}}) was employed with {{company_name}} as <strong>{{designation}}</strong> in the {{department}} department, from <strong>{{date_of_joining}}</strong> to <strong>{{date_of_relieving}}</strong>.</p>
+
+  <p>During the tenure with our organization, {{employee_name}} demonstrated professionalism, technical competence, and a strong work ethic. We found their conduct and performance to be satisfactory throughout the period of employment.</p>
+
+  <p>We wish {{employee_name}} success in all future endeavors.</p>
+
+  <div class="sig-block">
+    <div class="sig-role">For {{company_name}}</div>
+    <span class="sig-marker">[[TSI_SIGNATURE]]</span>
+    <div class="sig-line">{{hr_name}}<br/>{{hr_designation}}</div>
+  </div>
+</body>
+</html>

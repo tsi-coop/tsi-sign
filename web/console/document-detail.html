@@ -122,14 +122,15 @@
             currentDoc = await tsiCall("/api/v1/documents", "get_document", { appId, documentId });
             document.getElementById("doc-title").textContent = currentDoc.title;
 
-            const canSeal = currentDoc.status === "DRAFT" || currentDoc.status === "PARTIALLY_SIGNED";
+            const isArchived = !!currentDoc.archivedAt;
+            const canSeal = !isArchived && (currentDoc.status === "DRAFT" || currentDoc.status === "PARTIALLY_SIGNED");
             const hasSigners = currentDoc.signers.length > 0;
             const statusBadgeClass = currentDoc.status === "SIGNED" ? "active"
                 : currentDoc.status === "PARTIALLY_SIGNED" ? "neutral" : "inactive";
             document.getElementById("overview-panel").innerHTML = `
                 <table>
                     <tr><th>Document ID</th><td>${escapeHtml(currentDoc.documentId)}</td></tr>
-                    <tr><th>Status</th><td><span class="badge ${statusBadgeClass}">${escapeHtml(currentDoc.status)}</span></td></tr>
+                    <tr><th>Status</th><td><span class="badge ${statusBadgeClass}">${escapeHtml(currentDoc.status)}</span> ${isArchived ? '<span class="badge inactive">Archived</span>' : ""}</td></tr>
                     <tr><th>Original Hash (SHA-256)</th><td style="font-family:ui-monospace,monospace; font-size:12px;">${escapeHtml(currentDoc.originalHash)}</td></tr>
                     <tr><th>Sealed Hash (SHA-256)</th><td style="font-family:ui-monospace,monospace; font-size:12px;">${escapeHtml(currentDoc.sealedHash) || '<span class="muted">-</span>'}</td></tr>
                 </table>
@@ -137,12 +138,14 @@
                     <button id="download-document-btn">Download ${currentDoc.hasSealed ? "Signed" : "Original"} PDF</button>
                     ${canSeal && !hasSigners ? '<button id="seal-document-btn" style="margin-left:8px;">Apply Corporate Seal</button>' : ""}
                     ${canSeal && !hasSigners ? '<button class="secondary" id="esign-btn" style="margin-left:8px;">Send for Aadhaar eSign</button>' : ""}
+                    <button class="secondary" id="archive-toggle-btn" style="margin-left:8px;">${isArchived ? "Unarchive" : "Archive"}</button>
                 </div>
                 <div id="seal-notice" class="notice error" style="display:none; margin-top:12px;"></div>`;
             document.getElementById("download-document-btn").addEventListener("click", () => {
                 tsiOpenBlob("/api/v1/documents", "download_document", { appId, documentId })
                     .catch(err => showNotice(notice, err.message));
             });
+            document.getElementById("archive-toggle-btn").addEventListener("click", () => toggleArchived(isArchived));
             if (canSeal && !hasSigners) {
                 document.getElementById("seal-document-btn").addEventListener("click", () => sealLocal(null));
                 document.getElementById("esign-btn").addEventListener("click", () => openEsignModal(null));
@@ -211,6 +214,17 @@
                 nameField.readOnly = false;
             }
             openModal("esign-modal");
+        }
+
+        async function toggleArchived(currentlyArchived) {
+            try {
+                await tsiCall("/api/v1/documents", currentlyArchived ? "unarchive_document" : "archive_document", {
+                    appId, documentId
+                });
+                await load();
+            } catch (err) {
+                showNotice(notice, err.message);
+            }
         }
 
         async function sealLocal(anchorElementId) {

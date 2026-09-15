@@ -45,7 +45,10 @@ import org.tsicoop.sign.framework.HashUtil;
  *    cheap logic to keep in sync across two classes). upload_document is
  *    the raw-file counterpart to Templates.generate_document — same DRAFT
  *    document row, just with a null template_id and caller-supplied bytes.
- *  - list_documents, get_document, download_document: CONSOLE only (§10.4).
+ *  - list_documents, get_document, download_document, archive_document,
+ *    unarchive_document: CONSOLE only (§10.4). Archiving is independent of
+ *    signing-lifecycle status - it hides a document from the default list
+ *    and freezes seal/eSign activity on it without changing its status.
  *    A bare API-key caller has no role, so AuthorizationService naturally
  *    403s these rather than needing a separate guard.
  */
@@ -145,6 +148,12 @@ public class Documents implements Action {
                 case "download_document":
                     downloadDocument(req, res, body);
                     break;
+                case "archive_document":
+                    setDocumentArchived(req, res, body, true);
+                    break;
+                case "unarchive_document":
+                    setDocumentArchived(req, res, body, false);
+                    break;
                 default:
                     OutputProcessor.errorResponse(res, HttpServletResponse.SC_NOT_FOUND, "Not Found", "Unknown _func: " + func);
             }
@@ -192,6 +201,11 @@ public class Documents implements Action {
             return;
         }
         DocumentRepository.DocumentRecord document = documentOpt.get();
+        if (document.archivedAt() != null) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_CONFLICT, "Conflict",
+                    "Document is archived; unarchive it first before sealing.");
+            return;
+        }
         if (!"DRAFT".equals(document.status()) && !"PARTIALLY_SIGNED".equals(document.status())) {
             OutputProcessor.errorResponse(res, HttpServletResponse.SC_CONFLICT, "Conflict",
                     "Document is " + document.status() + "; cannot seal (must be DRAFT or PARTIALLY_SIGNED - " +
@@ -409,6 +423,11 @@ public class Documents implements Action {
             return;
         }
         DocumentRepository.DocumentRecord document = documentOpt.get();
+        if (document.archivedAt() != null) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_CONFLICT, "Conflict",
+                    "Document is archived; unarchive it first before initiating eSign.");
+            return;
+        }
         if (!"DRAFT".equals(document.status()) && !"PARTIALLY_SIGNED".equals(document.status())) {
             OutputProcessor.errorResponse(res, HttpServletResponse.SC_CONFLICT, "Conflict",
                     "Document is " + document.status() + "; cannot initiate eSign (must be DRAFT or " +
@@ -722,16 +741,46 @@ public class Documents implements Action {
             OutputProcessor.errorResponse(res, HttpServletResponse.SC_NOT_FOUND, "Not Found", "No such App.");
             return;
         }
+        boolean includeArchived = body.path("includeArchived").asBoolean(false);
         ArrayNode array = MAPPER.createArrayNode();
-        for (DocumentRepository.DocumentSummary doc : documentRepository.listForApp(appId)) {
+        for (DocumentRepository.DocumentSummary doc : documentRepository.listForApp(appId, includeArchived)) {
             ObjectNode node = array.addObject();
             node.put("documentId", doc.documentId());
             node.put("title", doc.title());
             node.put("templateName", doc.templateName());
             node.put("status", doc.status());
             node.put("createdAt", doc.createdAt());
+            node.put("archivedAt", doc.archivedAt());
         }
         OutputProcessor.send(res, HttpServletResponse.SC_OK, array);
+    }
+
+    /** Archive/unarchive a document. CONSOLE only - freezes it against further seal/eSign activity until unarchived. */
+    private void setDocumentArchived(HttpServletRequest req, HttpServletResponse res, JsonNode body, boolean archived)
+            throws Exception {
+        String appId = body.path("appId").asText(null);
+        String documentId = body.path("documentId").asText(null);
+        if (appId == null || documentId == null) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request", "appId and documentId are required.");
+            return;
+        }
+        if (!authorizationService.canWrite(InputProcessor.getUserRole(req), InputProcessor.getUserId(req), appId)) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_FORBIDDEN, "Forbidden", "You do not have write access to this App.");
+            return;
+        }
+        boolean updated = archived
+                ? documentRepository.archive(appId, documentId)
+                : documentRepository.unarchive(appId, documentId);
+        if (!updated) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_NOT_FOUND, "Not Found", "No such document.");
+            return;
+        }
+        auditLogRepository.log(appId, documentId, archived ? "DOCUMENT_ARCHIVED" : "DOCUMENT_UNARCHIVED",
+                "PLATFORM_USER", InputProcessor.getUserId(req), req.getRemoteAddr(), req.getHeader("User-Agent"));
+        ObjectNode json = MAPPER.createObjectNode();
+        json.put("documentId", documentId);
+        json.put("archived", archived);
+        OutputProcessor.send(res, HttpServletResponse.SC_OK, json);
     }
 
     /** §10.4 Document Detail: fields + seal(s) + full audit_logs timeline. CONSOLE only. */
@@ -760,6 +809,7 @@ public class Documents implements Action {
         json.put("originalHash", document.originalHash());
         json.put("sealedHash", document.sealedHash());
         json.put("hasSealed", document.sealedStorageKey() != null);
+        json.put("archivedAt", document.archivedAt());
 
         ArrayNode seals = json.putArray("seals");
         for (DocumentRepository.SealSummary seal : documentRepository.listSealsForDocument(documentId)) {

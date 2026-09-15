@@ -19,7 +19,8 @@ public class TemplateRepository {
             String templateName,
             String category,
             String htmlContent,
-            int version
+            int version,
+            boolean active
     ) {
     }
 
@@ -57,7 +58,7 @@ public class TemplateRepository {
         try {
             pool = new PoolDB();
             con = pool.getConnection();
-            ps = con.prepareStatement("SELECT template_id, app_id, template_name, category, html_content, version " +
+            ps = con.prepareStatement("SELECT template_id, app_id, template_name, category, html_content, version, active " +
                     "FROM templates WHERE template_id = ?::uuid AND app_id = ?::uuid");
             ps.setString(1, templateId);
             ps.setString(2, appId);
@@ -69,7 +70,8 @@ public class TemplateRepository {
                         rs.getString("template_name"),
                         rs.getString("category"),
                         rs.getString("html_content"),
-                        rs.getInt("version")));
+                        rs.getInt("version"),
+                        rs.getBoolean("active")));
             }
             return Optional.empty();
         } catch (Exception e) {
@@ -90,7 +92,7 @@ public class TemplateRepository {
         PoolDB pool = new PoolDB();
         try {
             con = pool.getConnection();
-            ps = con.prepareStatement("SELECT template_id, app_id, template_name, category, html_content, version " +
+            ps = con.prepareStatement("SELECT template_id, app_id, template_name, category, html_content, version, active " +
                     "FROM templates WHERE app_id = ?::uuid ORDER BY updated_at DESC");
             ps.setString(1, appId);
             rs = ps.executeQuery();
@@ -102,11 +104,36 @@ public class TemplateRepository {
                         rs.getString("template_name"),
                         rs.getString("category"),
                         rs.getString("html_content"),
-                        rs.getInt("version")));
+                        rs.getInt("version"),
+                        rs.getBoolean("active")));
             }
             return templates;
         } finally {
             pool.cleanup(rs, ps, con);
+        }
+    }
+
+    /**
+     * Deactivating a template blocks it from new generate_document calls
+     * (and hides it from "Generate from Template") without touching any
+     * document already generated from it. Scoped to appId for the same
+     * tenant-isolation reason as findByIdForApp. Returns false if no row
+     * matched (wrong app or unknown templateId), so the caller can 404.
+     */
+    public boolean setActive(String appId, String templateId, boolean active) throws Exception {
+        Connection con = null;
+        PreparedStatement ps = null;
+        PoolDB pool = new PoolDB();
+        try {
+            con = pool.getConnection();
+            ps = con.prepareStatement("UPDATE templates SET active = ?, updated_at = now() " +
+                    "WHERE template_id = ?::uuid AND app_id = ?::uuid");
+            ps.setBoolean(1, active);
+            ps.setString(2, templateId);
+            ps.setString(3, appId);
+            return ps.executeUpdate() > 0;
+        } finally {
+            pool.cleanup(null, ps, con);
         }
     }
 

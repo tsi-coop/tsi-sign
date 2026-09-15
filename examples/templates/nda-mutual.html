@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+<!--
+  Mutual Non-Disclosure Agreement
+  Multisig example: two independent signers (Party A, Party B).
+  Payload: examples/payloads/nda-mutual.json
+-->
+<style>
+  @page { size: A4; margin: 25mm 20mm; }
+  body { font-family: 'Times New Roman', Georgia, serif; font-size: 12pt; color: #1a1a1a; line-height: 1.5; }
+  .letterhead { text-align: center; border-bottom: 2px solid #1a3d6d; padding-bottom: 10px; margin-bottom: 24px; }
+  .letterhead .company { font-size: 18pt; font-weight: bold; color: #1a3d6d; letter-spacing: 1px; }
+  .letterhead .doc-title { font-size: 14pt; margin-top: 6px; text-transform: uppercase; letter-spacing: 2px; }
+  h2.section { font-size: 12pt; margin-top: 22px; margin-bottom: 6px; color: #1a3d6d; border-bottom: 1px solid #ccc; padding-bottom: 2px; }
+  p { text-align: justify; margin: 8px 0; }
+  table.meta { width: 100%; border-collapse: collapse; margin: 14px 0; }
+  table.meta td { padding: 4px 6px; font-size: 11pt; vertical-align: top; }
+  table.meta td.label { color: #555; width: 30%; }
+  ol.terms { padding-left: 18px; }
+  ol.terms li { margin-bottom: 8px; text-align: justify; }
+  table.sig-block { width: 100%; border-collapse: collapse; margin-top: 50px; }
+  table.sig-block td { width: 50%; vertical-align: top; padding: 0 10px; }
+  .sig-role { font-weight: bold; margin-bottom: 46px; }
+  .sig-line { border-top: 1px solid #333; padding-top: 4px; }
+  .sig-marker { color: #ffffff; font-size: 1px; }
+  .footer-note { margin-top: 30px; font-size: 9pt; color: #777; text-align: center; }
+</style>
+</head>
+<body>
+  <div class="letterhead">
+    <div class="company">{{company_name}}</div>
+    <div class="doc-title">Mutual Non-Disclosure Agreement</div>
+  </div>
+
+  <p>This Mutual Non-Disclosure Agreement ("Agreement") is entered into as of <strong>{{effective_date}}</strong>, by and between:</p>
+
+  <table class="meta">
+    <tr><td class="label">Party A</td><td>{{party_a_name}}, having its principal address at {{party_a_address}}</td></tr>
+    <tr><td class="label">Party B</td><td>{{party_b_name}}, having its principal address at {{party_b_address}}</td></tr>
+  </table>
+
+  <h2 class="section">1. Purpose</h2>
+  <p>The parties wish to explore {{purpose}} (the "Purpose"), and in connection with the Purpose, each party may disclose to the other certain confidential technical and business information which the disclosing party desires the receiving party to treat as confidential.</p>
+
+  <h2 class="section">2. Terms</h2>
+  <ol class="terms">
+    <li>"Confidential Information" means any information disclosed by either party to the other, either directly or indirectly, in writing, orally, or by inspection of tangible objects, that is designated as confidential or that reasonably should be understood to be confidential given the nature of the information and the circumstances of disclosure.</li>
+    <li>The receiving party shall use the Confidential Information solely for the Purpose and shall protect it using the same degree of care it uses for its own confidential information, but in no event less than reasonable care.</li>
+    <li>The receiving party shall not disclose Confidential Information to any third party without prior written consent of the disclosing party.</li>
+    <li>This Agreement shall remain in effect for a period of {{term_years}} year(s) from the Effective Date.</li>
+    <li>This Agreement is governed by the Indian Contract Act, 1872, and shall be stamped as required under the Indian Stamp Act, 1899, and the stamp duty legislation of the state of execution.</li>
+    <li>This Agreement shall be governed by and construed in accordance with the laws of India, and the courts at {{jurisdiction_city}} shall have exclusive jurisdiction over any disputes arising hereunder.</li>
+  </ol>
+
+  <p>IN WITNESS WHEREOF, the parties have executed this Agreement as of the Effective Date first written above.</p>
+
+  <table class="sig-block">
+    <tr>
+      <td>
+        <div class="sig-role">For {{party_a_name}}</div>
+        <span class="sig-marker">[[TSI_SIGNATURE:party_a]]</span>
+        <div class="sig-line">Authorized Signatory<br/>Date: {{effective_date}}</div>
+      </td>
+      <td>
+        <div class="sig-role">For {{party_b_name}}</div>
+        <span class="sig-marker">[[TSI_SIGNATURE:party_b]]</span>
+        <div class="sig-line">Authorized Signatory<br/>Date: {{effective_date}}</div>
+      </td>
+    </tr>
+  </table>
+
+  <p class="footer-note">This document was generated electronically and is intended to be executed with digital signatures for both parties.</p>
+</body>
+</html>
