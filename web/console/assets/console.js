@@ -89,6 +89,14 @@ function escapeHtml(value) {
         .replaceAll('"', "&quot;");
 }
 
+/** The API returns UTC ISO-8601 timestamps; render them in the viewer's own local time zone. */
+function formatLocalTime(isoString) {
+    if (!isoString) return "";
+    const date = new Date(isoString);
+    if (isNaN(date.getTime())) return isoString;
+    return date.toLocaleString();
+}
+
 function qs(name) {
     return new URLSearchParams(window.location.search).get(name);
 }

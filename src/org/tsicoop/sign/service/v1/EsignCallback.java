@@ -29,12 +29,14 @@ import java.util.Optional;
 /**
  * PUBLIC (prep/TSI-Sign-Aadhaar-eSign-Plan.md): the ESP itself calls this,
  * not an App or a console session, so there is no X-API-Key/session to
- * check here. Today only {@code mock_approve} exists (the mock consent
- * page's own "Approve" action, standing in for a real ESP's callback) - a
- * real adapter's callback ({@code process_callback}, verified against that
- * provider's own signing certificate) is not wired up in this deployment,
- * since no CCA-licensed ESP credentials exist here (see the plan's
- * explicit scope limits).
+ * check here. Today only the mock consent page's own funcs exist -
+ * {@code mock_session_info}/{@code mock_preview_document} (read-only, let
+ * the page show what/who it's asking to sign without exposing any real
+ * API), {@code mock_approve}/{@code mock_deny} (its Approve/Deny actions,
+ * standing in for a real ESP's callback). A real adapter's callback
+ * ({@code process_callback}, verified against that provider's own signing
+ * certificate) is not wired up in this deployment, since no CCA-licensed
+ * ESP credentials exist here (see the plan's explicit scope limits).
  */
 public class EsignCallback implements Action {
 
@@ -70,6 +72,9 @@ public class EsignCallback implements Action {
             switch (func) {
                 case "mock_session_info":
                     mockSessionInfo(res, body);
+                    break;
+                case "mock_preview_document":
+                    mockPreviewDocument(res, body);
                     break;
                 case "mock_approve":
                     mockApprove(req, res, body);
@@ -111,6 +116,50 @@ public class EsignCallback implements Action {
         json.put("signerName", signerOpt.map(DocumentSignerRepository.DocumentSignerRecord::signerName).orElse(null));
         json.put("documentTitle", documentOpt.map(DocumentRepository.DocumentRecord::title).orElse(null));
         OutputProcessor.send(res, HttpServletResponse.SC_OK, json);
+    }
+
+    /**
+     * Lets the mock consent page show the actual PDF bytes about to be
+     * signed (the same reserved-signature-space content that gets hashed
+     * and sent for OTP consent), so a signer isn't asked to approve a
+     * document they can't see. Same trust boundary as mockSessionInfo -
+     * gated purely by knowledge of transactionId, no session/API key.
+     */
+    private void mockPreviewDocument(HttpServletResponse res, JsonNode body) throws Exception {
+        String transactionId = body.path("transactionId").asText(null);
+        if (transactionId == null) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request", "transactionId is required.");
+            return;
+        }
+        Optional<EsignSessionRepository.EsignSessionRecord> sessionOpt =
+                esignSessionRepository.findByTransactionId(MockAadhaarEsignAdapter.PROVIDER_ID, transactionId);
+        if (sessionOpt.isEmpty()) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_NOT_FOUND, "Not Found", "No such eSign session.");
+            return;
+        }
+        EsignSessionRepository.EsignSessionRecord session = sessionOpt.get();
+        Optional<DocumentRepository.DocumentRecord> documentOpt = documentRepository.findById(session.documentId());
+        if (documentOpt.isEmpty()) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_NOT_FOUND, "Not Found", "Document no longer exists.");
+            return;
+        }
+        DocumentRepository.DocumentRecord document = documentOpt.get();
+
+        DocumentStorageProvider storageProvider;
+        try {
+            storageProvider = StorageProviderRegistry.resolve(document.storageProviderId());
+        } catch (Exception e) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error",
+                    "Unsupported storage provider for this document: " + document.storageProviderId());
+            return;
+        }
+        StorageObjectRef preparedRef = new StorageObjectRef(document.storageProviderId(), session.preparedStorageKey(), null);
+        byte[] pdfBytes = storageProvider.retrieve(preparedRef);
+
+        res.setStatus(HttpServletResponse.SC_OK);
+        res.setContentType("application/pdf");
+        res.setHeader("Content-Disposition", "inline; filename=\"preview.pdf\"");
+        res.getOutputStream().write(pdfBytes);
     }
 
     private void mockDeny(HttpServletRequest req, HttpServletResponse res, JsonNode body) throws Exception {

@@ -165,7 +165,7 @@
                         <td>${escapeHtml(s.signerName)}</td>
                         <td>${escapeHtml(s.signatureType)}</td>
                         <td><span class="badge ${s.status === "SIGNED" ? "active" : s.status === "FAILED" ? "inactive" : "neutral"}">${escapeHtml(s.status)}</span></td>
-                        <td class="muted">${escapeHtml(s.signedAt) || "-"}</td>
+                        <td class="muted">${escapeHtml(formatLocalTime(s.signedAt)) || "-"}</td>
                         <td>${s.gatewayUrl ? `<a class="btn secondary" href="${escapeHtml(s.gatewayUrl)}" target="_blank" rel="noopener">Open Consent Page</a>` : ""}</td>
                         <td>${s.status === "PENDING" && canSeal ? signerActionButtons(s) : ""}</td>
                     </tr>`).join("");
@@ -184,7 +184,7 @@
                         <td>${escapeHtml(s.providerId)}</td>
                         <td>${escapeHtml(s.keyAlias) || "-"}</td>
                         <td>${escapeHtml(s.signatureStandard) || "-"}</td>
-                        <td class="muted">${escapeHtml(s.sealedAt)}</td>
+                        <td class="muted">${escapeHtml(formatLocalTime(s.sealedAt))}</td>
                     </tr>`).join("");
 
             const timelineBody = document.getElementById("timeline-body");
@@ -195,7 +195,7 @@
                         <td>${escapeHtml(a.eventType)}</td>
                         <td>${escapeHtml(a.actorType)}</td>
                         <td class="muted">${escapeHtml(a.ipAddress) || "-"}</td>
-                        <td class="muted">${escapeHtml(a.createdAt)}</td>
+                        <td class="muted">${escapeHtml(formatLocalTime(a.createdAt))}</td>
                     </tr>`).join("");
 
             renderLegalPanel();

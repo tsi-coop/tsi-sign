@@ -66,7 +66,7 @@
                         <td>${escapeHtml(e.appName)}</td>
                         <td>${e.version}</td>
                         <td style="font-family:ui-monospace,monospace; font-size:12px;">${escapeHtml(e.certificateHash).slice(0, 16)}…</td>
-                        <td class="muted">${escapeHtml(e.createdAt)}</td>
+                        <td class="muted">${escapeHtml(formatLocalTime(e.createdAt))}</td>
                     </tr>`).join("");
         }
 

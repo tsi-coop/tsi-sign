@@ -4,3 +4,4 @@ target/
 *.iml
 .env
 .help
+examples/integration/.state.json

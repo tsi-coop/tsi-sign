@@ -45,3 +45,7 @@ Each template has a matching sample payload of the same base name under
 3. For the multisig examples, the console's Document Detail page will show
    one row per named signer (`party_a`/`party_b`, `lender`/`borrower`),
    each sealed independently.
+
+See `integration/` for runnable scripts that do all of the above (register
+every template here, generate a document from each, then seal them) end to
+end over the API.

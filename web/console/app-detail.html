@@ -184,7 +184,7 @@
                     <tr><th>Default provider</th><td>${escapeHtml(app.defaultProviderId) || '<span class="muted">-</span>'}</td></tr>
                     <tr><th>Default key alias</th><td>${escapeHtml(app.defaultKeyAlias) || '<span class="muted">-</span>'}</td></tr>
                     <tr><th>Storage backend</th><td>${app.storageProviderId ? escapeHtml(app.storageProviderId) : '<span class="muted">deployment default</span>'}</td></tr>
-                    <tr><th>Created</th><td>${escapeHtml(app.createdAt)}</td></tr>
+                    <tr><th>Created</th><td>${escapeHtml(formatLocalTime(app.createdAt))}</td></tr>
                 </table>`;
             document.getElementById("signing-provider").value = app.defaultProviderId || "";
             document.getElementById("signing-key-alias").value = app.defaultKeyAlias || "";
@@ -216,8 +216,8 @@
                     <tr>
                         <td class="mono">${escapeHtml(k.apiKey)}</td>
                         <td><span class="badge ${k.isActive ? "active" : "inactive"}">${k.isActive ? "Active" : "Revoked"}</span></td>
-                        <td class="muted">${escapeHtml(k.createdAt)}</td>
-                        <td class="muted">${escapeHtml(k.revokedAt) || "-"}</td>
+                        <td class="muted">${escapeHtml(formatLocalTime(k.createdAt))}</td>
+                        <td class="muted">${escapeHtml(formatLocalTime(k.revokedAt)) || "-"}</td>
                         <td>${k.isActive ? `
                             <button class="secondary small" onclick="rotateKey('${k.keyId}')">Rotate</button>
                             <button class="danger small" onclick="revokeKey('${k.keyId}')">Revoke</button>` : ""}</td>
