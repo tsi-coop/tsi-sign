@@ -280,6 +280,19 @@ public class Documents implements Action {
         if (signerId != null) {
             documentSignerRepository.markStatus(signerId, "SIGNED");
             newStatus = anyOtherSignerPending(documentId) ? "PARTIALLY_SIGNED" : "SIGNED";
+        } else {
+            // Legacy "stamp everything in one shot" path (no signerName): the
+            // whole document, every marker included, was just sealed as one
+            // operation, so any row SignerDiscoveryService pre-created for
+            // those markers (still PENDING/UNASSIGNED - e.g. the "default"
+            // row for a single anonymous [[TSI_SIGNATURE]] marker) must move
+            // to SIGNED too. Otherwise the document sits at SIGNED while its
+            // own signer table still shows PENDING forever.
+            for (DocumentSignerRepository.DocumentSignerRecord existing : documentSignerRepository.listForDocument(documentId)) {
+                if (!"SIGNED".equals(existing.status())) {
+                    documentSignerRepository.markStatus(existing.signerId(), "SIGNED");
+                }
+            }
         }
 
         boolean updated = documentRepository.markSealedIfHashMatches(
