@@ -84,7 +84,7 @@
                             <td><a href="app-detail.html?appId=${encodeURIComponent(a.appId)}">${escapeHtml(a.appName)}</a></td>
                             <td>${escapeHtml(a.appSlug)}</td>
                             <td><span class="badge ${a.isActive ? "active" : "inactive"}">${a.isActive ? "Active" : "Inactive"}</span></td>
-                            <td class="muted">${escapeHtml(a.createdAt)}</td>
+                            <td class="muted">${escapeHtml(formatLocalTime(a.createdAt))}</td>
                         </tr>`).join("");
             } catch (err) {
                 showNotice(notice, err.message);

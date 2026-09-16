@@ -141,7 +141,7 @@
                             <td>${escapeHtml(a.appSlug)}</td>
                             <td><span class="badge ${a.isActive ? "active" : "inactive"}">${a.isActive ? "Active" : "Inactive"}</span></td>
                             <td>${escapeHtml(a.defaultProviderId) || '<span class="muted">-</span>'}</td>
-                            <td class="muted">${escapeHtml(a.createdAt)}</td>
+                            <td class="muted">${escapeHtml(formatLocalTime(a.createdAt))}</td>
                         </tr>
                     `).join("");
                 renderPagination(result, "apps-page-info", "apps-page-btns", "App", loadApps);

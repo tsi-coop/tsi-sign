@@ -113,7 +113,7 @@
                     ? '<tr><td colspan="6" class="muted">No audit events.</td></tr>'
                     : result.auditLogs.map(a => `
                         <tr>
-                            <td class="muted">${escapeHtml(a.createdAt)}</td>
+                            <td class="muted">${escapeHtml(formatLocalTime(a.createdAt))}</td>
                             <td><span class="badge neutral">${escapeHtml(eventLabel(a.eventType))}</span></td>
                             <td>${escapeHtml(a.appName)}</td>
                             <td>${a.documentId

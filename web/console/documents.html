@@ -139,7 +139,7 @@
                         <td><a href="document-detail.html?appId=${encodeURIComponent(appId)}&documentId=${encodeURIComponent(d.documentId)}">${escapeHtml(d.title)}</a>${d.archivedAt ? ' <span class="badge inactive">Archived</span>' : ""}</td>
                         <td>${escapeHtml(d.templateName) || '<span class="muted">-</span>'}</td>
                         <td><span class="badge ${d.status === "SIGNED" ? "active" : "inactive"}">${escapeHtml(d.status)}</span></td>
-                        <td class="muted">${escapeHtml(d.createdAt)}</td>
+                        <td class="muted">${escapeHtml(formatLocalTime(d.createdAt))}</td>
                         <td><button class="small" onclick="toggleDocumentArchived('${d.documentId}', ${!!d.archivedAt})">${d.archivedAt ? "Unarchive" : "Archive"}</button></td>
                     </tr>`).join("");
             renderPagination(result, "documents-page-info", "documents-page-btns", "document", loadDocuments);

@@ -88,6 +88,9 @@ curl -X POST http://localhost:8088/api/v1/templates \
   -d '{"_func":"generate_document","templateId":"...","documentTitle":"Offer.pdf","payloadData":{"name":"Jane"}}'
 ```
 
+See `examples/integration/` for runnable scripts that register a template,
+generate a document, and seal it end to end over this API.
+
 ## Project structure
 
 ```
