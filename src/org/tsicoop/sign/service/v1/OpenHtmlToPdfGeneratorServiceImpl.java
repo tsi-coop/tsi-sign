@@ -9,7 +9,7 @@ import java.util.Map;
 
 /**
  * Renders HTML+CSS to PDF/A via OpenHTMLtoPDF (backed by Apache PDFBox),
- * per the Technical Architecture doc's engine pipeline: Mustache merge ->
+ * per the original Technical Architecture doc (removed; see git history)'s engine pipeline: Mustache merge ->
  * OpenHTMLtoPDF render -> SHA-256 hash.
  */
 public class OpenHtmlToPdfGeneratorServiceImpl implements DocumentGeneratorService {

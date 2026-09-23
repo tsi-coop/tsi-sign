@@ -80,8 +80,8 @@
     <div class="modal-overlay" id="esign-modal">
         <div class="modal">
             <h2>Send for Aadhaar eSign</h2>
-            <p class="modal-sub">Only the mock ESP (local evaluation) is configured in this deployment - no real
-                Aadhaar OTP/biometric authentication happens.</p>
+            <p class="modal-sub">The signer authenticates with Aadhaar on the configured CA's own site; only a hash of
+                this document is sent to it. The default provider in a fresh install is the TSI Sandbox (a mock CA - not a real Aadhaar authentication).</p>
             <form id="esign-form">
                 <div class="field"><label>Signer name</label><input type="text" id="esign-signer-name" required></div>
                 <div class="field"><label>Signer email (optional)</label><input type="email" id="esign-signer-email"></div>
@@ -96,7 +96,7 @@
         </div>
     </div>
 
-    <!-- Aadhaar eSign initiated - link to the (mock) consent page -->
+    <!-- Aadhaar eSign initiated - link to the CA's consent page -->
     <div class="modal-overlay" id="esign-initiated-modal">
         <div class="modal">
             <h2>eSign Request Sent</h2>
@@ -203,7 +203,7 @@
 
         /**
          * signerName now doubles as the [[TSI_SIGNATURE:name]] marker match
-         * key (prep/TSI-Sign-Multi-Signature-Documents-Plan.md), so a scoped
+         * key (docs/architecture.md §6.4), so a scoped
          * per-signer row locks it to that row's anchorElementId; the global
          * button (no existing signer rows yet) leaves it free-text, exactly
          * as before.
@@ -318,7 +318,7 @@
 
         /**
          * The signer typically goes off to a separate tab to actually complete
-         * eSign (real OTP/biometric, or the mock consent page) and comes back
+         * eSign (Aadhaar OTP/biometric on the CA's site) and comes back
          * to close this modal afterward - that's the natural moment to pick up
          * whatever changed while they were gone, without a manual Refresh.
          */

@@ -24,7 +24,7 @@ public class DocumentSignerRepository {
 
     /**
      * @param anchorElementId ties to the template's [[TSI_SIGNATURE:name]]
-     *                        marker (prep/TSI-Sign-Multi-Signature-Documents-Plan.md)
+     *                        marker (docs/architecture.md §6.4)
      *                        - null for documents with no marker, where
      *                        there's no slot to anchor to.
      */

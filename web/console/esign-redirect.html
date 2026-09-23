@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redirecting to eSign - TSI Sign</title>
+    <style>
+        body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;color:#172033;background:#f3f7f8}
+        .card{background:#fff;border:1px solid #d9e2ec;border-radius:12px;padding:32px;max-width:420px;text-align:center}
+        .err{color:#b42318}
+    </style>
+</head>
+<body>
+<div class="card">
+    <h2 style="margin-top:0">Taking you to the signing service</h2>
+    <p id="msg">Only a hash of your document is sent - the document itself never leaves your organisation.</p>
+    <form id="f" method="post"></form>
+</div>
+<script>
+    (async function () {
+        const q = new URLSearchParams(location.search);
+        const msg = document.getElementById("msg");
+        try {
+            const res = await fetch("/api/v1/esign/callback", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({_func: "gateway_payload", provider: q.get("provider"), transactionId: q.get("txn")})
+            });
+            const data = await res.json();
+            if (!res.ok || !data.actionUrl) throw new Error(data.message || "This signing link is no longer valid.");
+            const form = document.getElementById("f");
+            form.action = data.actionUrl;
+            for (const [name, value] of Object.entries(data.fields || {})) {
+                const input = document.createElement("input");
+                input.type = "hidden"; input.name = name; input.value = value;
+                form.appendChild(input);
+            }
+            form.submit();
+        } catch (e) {
+            msg.className = "err";
+            msg.textContent = e.message;
+        }
+    })();
+</script>
+</body>
+</html>

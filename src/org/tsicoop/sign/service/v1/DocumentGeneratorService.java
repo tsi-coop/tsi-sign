@@ -6,7 +6,7 @@ import java.util.Map;
  * Merges dynamic data into an HTML template and compiles a rendered PDF.
  *
  * Takes the template's HTML directly rather than a templateId (as the
- * Technical Architecture doc's illustrative interface does) — fetching a
+ * original Technical Architecture doc (removed; see git history)'s illustrative interface does) - fetching a
  * template by id/App scope is a repository concern (TemplateRepository),
  * kept separate from rendering so this service stays pure and testable
  * without a DB.

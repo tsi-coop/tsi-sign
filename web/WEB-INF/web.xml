@@ -46,4 +46,17 @@
 		<url-pattern>/api/*</url-pattern>
 		<dispatcher>REQUEST</dispatcher>
 	</filter-mapping>
+
+	<!--
+	  Return leg of the CCA eSign flow: the ESP form-POSTs the signed response back here through
+	  the signer's browser, so it can't use the JSON /api/v1 convention (see EsignReturnServlet).
+	-->
+	<servlet>
+		<servlet-name>EsignReturn</servlet-name>
+		<servlet-class>org.tsicoop.sign.service.v1.EsignReturnServlet</servlet-class>
+	</servlet>
+	<servlet-mapping>
+		<servlet-name>EsignReturn</servlet-name>
+		<url-pattern>/esign/return/*</url-pattern>
+	</servlet-mapping>
 </web-app>

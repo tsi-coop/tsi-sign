@@ -23,7 +23,7 @@ import java.time.format.DateTimeFormatter;
  * client, config-driven so it covers AWS S3 *and* a self-hosted
  * S3-compatible store (MinIO, Ceph RGW, Cloudflare R2) with the same code
  * path: endpoint URL + path-style addressing are config, not a second
- * provider class (see prep/TSI-Sign-Storage-Drivers-Plan.md, "one S3
+ * provider class (see docs/architecture.md §5, "one S3
  * driver, not two").
  */
 public class S3StorageProvider implements DocumentStorageProvider {

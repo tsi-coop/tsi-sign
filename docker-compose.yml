@@ -54,11 +54,49 @@ services:
       DEFAULT_KEY_ALIAS: "${DEFAULT_KEY_ALIAS:-tsi_corporate_seal}"
       # Signs admin-console session JWTs (§10) - override via .env for any real deployment.
       JWT_SECRET: "${JWT_SECRET:-dev_insecure_jwt_secret_change_in_production}"
+      # Browser-reachable base URL of this server: the eSign redirect page and the CA's
+      # return URL are built from it (the signer's browser carries both legs).
+      PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-http://localhost:8088}"
+      # eSign provider used when neither the request nor the App names one. The bundled
+      # sandbox is a MOCK CA - point real Apps at emudhra/cdac/protean/vsign/... instead.
+      DEFAULT_ESIGN_PROVIDER_ID: "${DEFAULT_ESIGN_PROVIDER_ID:-sandbox}"
+      # Optional RFC 3161 time-stamping (PAdES-B-T). Off unless TSA_URL is set; TSA_TRUST_CERTS
+      # (the TSA's CA, PEM) is then required. Not enabled by default: the bundled sandbox's TSA
+      # is a mock, and a time-stamp from it is not evidence of anything.
+      TSA_URL: "${TSA_URL:-}"
+      TSA_TRUST_CERTS: "${TSA_TRUST_CERTS:-}"
+      TSA_REQUIRED: "${TSA_REQUIRED:-false}"
+      ESIGN_SANDBOX_URL: "${ESIGN_SANDBOX_URL:-http://localhost:8090/esign/2.1/form/signdoc}"
+      ESIGN_SANDBOX_ASP_ID: "${ESIGN_SANDBOX_ASP_ID:-TSI-SANDBOX-ASP}"
+      ESIGN_SANDBOX_TRUST_CERTS: /etc/tsi-sign/sandbox-ca/root.pem
+      ESIGN_SANDBOX_ESP_CERT: /etc/tsi-sign/sandbox-ca/esp.pem
     volumes:
       - sign_documents:/data/tsi-sign/documents
+      - sandbox_ca:/etc/tsi-sign/sandbox-ca:ro
     depends_on:
       postgres_db:
         condition: service_healthy
+      esign_sandbox:
+        condition: service_started
+    networks:
+      - sign_network
+
+  # Mock CCA-licensed eSign Service Provider + CA (sandbox/). For development and
+  # evaluation ONLY: it performs no real Aadhaar authentication and its CA is not
+  # trusted by anything. Drop this service (and DEFAULT_ESIGN_PROVIDER_ID) once a real
+  # CA's ESIGN_<PROVIDER>_* settings are configured.
+  esign_sandbox:
+    build:
+      context: ./sandbox
+    container_name: tsi_sign_esign_sandbox
+    restart: unless-stopped
+    ports:
+      - "${SANDBOX_PORT_MAP:-8090:8090}"
+    environment:
+      PORT: "8090"
+      SANDBOX_CA_DIR: /data/ca
+    volumes:
+      - sandbox_ca:/data/ca
     networks:
       - sign_network
 
@@ -70,4 +108,6 @@ volumes:
   sign_data:
     driver: local
   sign_documents:
+    driver: local
+  sandbox_ca:
     driver: local

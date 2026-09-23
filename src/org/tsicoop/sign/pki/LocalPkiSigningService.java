@@ -31,9 +31,11 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Seals a PDF with a PAdES-B-B (CAdES-detached) signature using a local
+ * Seals a PDF with a PAdES-B-B (CAdES-detached) signature - upgraded to B-T when a TSA is
+ * configured ({@link SignatureTimestamper}) - using a local
  * KeyStore alias — no external CA, no network hop (§7 Local PKI flow).
  * The actual CMS/PKCS7 computation follows PDFBox's own reference pattern
  * (org.apache.pdfbox.examples.signature.CreateSignature) via BouncyCastle.
@@ -59,7 +61,7 @@ public class LocalPkiSigningService {
         this.keyStoreProvider = keyStoreProvider;
     }
 
-    public record SealResult(byte[] sealedPdfBytes, String sha256Hash) {
+    public record SealResult(byte[] sealedPdfBytes, String sha256Hash, String signatureStandard) {
     }
 
     public SealResult seal(byte[] originalPdfBytes, String keyAlias, String reason, String location,
@@ -73,7 +75,7 @@ public class LocalPkiSigningService {
      *                              real widget, the rest plain overlay
      *                              stamps - unchanged single-operation
      *                              behavior. Non-null (multi-signature
-     *                              documents, prep/TSI-Sign-Multi-Signature-Documents-Plan.md):
+     *                              documents, docs/architecture.md §6.4):
      *                              only that one named marker becomes the
      *                              real widget; every *other* marker is left
      *                              completely untouched so it's still
@@ -99,7 +101,18 @@ public class LocalPkiSigningService {
             Calendar signDate = Calendar.getInstance();
             signature.setSignDate(signDate);
 
-            SignatureInterface signatureInterface = content -> signCms(content, keyEntry);
+            AtomicReference<String> signatureStandard = new AtomicReference<>(SignatureTimestamper.B_B);
+            SignatureInterface signatureInterface = content -> {
+                try {
+                    SignatureTimestamper.Result stamped = SignatureTimestamper.fromEnv().apply(signCms(content, keyEntry));
+                    signatureStandard.set(stamped.signatureStandard());
+                    return stamped.cms();
+                } catch (IOException e) {
+                    throw e;
+                } catch (Exception e) {
+                    throw new IOException("Failed to time-stamp signature", e);
+                }
+            };
 
             SignatureOptions signatureOptions = new SignatureOptions();
             signatureOptions.setPreferredSignatureSize(SignatureOptions.DEFAULT_SIGNATURE_SIZE * 2);
@@ -115,7 +128,7 @@ public class LocalPkiSigningService {
             document.saveIncremental(sealedOut);
 
             byte[] sealedBytes = sealedOut.toByteArray();
-            return new SealResult(sealedBytes, HashUtil.sha256Hex(sealedBytes));
+            return new SealResult(sealedBytes, HashUtil.sha256Hex(sealedBytes), signatureStandard.get());
         }
     }
 
