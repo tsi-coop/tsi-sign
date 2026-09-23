@@ -8,7 +8,7 @@ import java.util.Map;
 /**
  * Pre-registers a PENDING/UNASSIGNED {@code document_signers} row for every
  * named {@code [[TSI_SIGNATURE:name]]} marker found in a document's PDF at
- * creation time (prep/TSI-Sign-Multi-Signature-Documents-Plan.md).
+ * creation time (docs/architecture.md §6.4).
  *
  * <p>Without this, {@code document_signers} stayed empty until the first
  * seal/eSign call created a row as a side effect - so the console's

@@ -12,13 +12,14 @@ public class EsignSessionRepository {
 
     public record EsignSessionRecord(
             String sessionId, String documentId, String signerId, String providerId, String transactionId,
-            String preparedStorageKey, int[] byteRange, String signatureFieldName, String status, String gatewayUrl
+            String preparedStorageKey, int[] byteRange, String signatureFieldName, String status, String gatewayUrl,
+            String gatewayPayload
     ) {
     }
 
     public String create(String documentId, String signerId, String providerId, String transactionId,
                           String preparedStorageKey, int[] byteRange, String signatureFieldName,
-                          String gatewayUrl) throws Exception {
+                          String gatewayUrl, String gatewayPayload) throws Exception {
         Connection con = null;
         PreparedStatement ps = null;
         ResultSet rs = null;
@@ -27,8 +28,8 @@ public class EsignSessionRepository {
             con = pool.getConnection();
             ps = con.prepareStatement("INSERT INTO esign_sessions (document_id, signer_id, provider_id, " +
                     "transaction_id, prepared_storage_key, byte_range_0, byte_range_1, byte_range_2, " +
-                    "byte_range_3, signature_field_name, gateway_url) " +
-                    "VALUES (?::uuid, ?::uuid, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING session_id");
+                    "byte_range_3, signature_field_name, gateway_url, gateway_payload) " +
+                    "VALUES (?::uuid, ?::uuid, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING session_id");
             ps.setString(1, documentId);
             ps.setString(2, signerId);
             ps.setString(3, providerId);
@@ -40,6 +41,7 @@ public class EsignSessionRepository {
             ps.setInt(9, byteRange[3]);
             ps.setString(10, signatureFieldName);
             ps.setString(11, gatewayUrl);
+            ps.setString(12, gatewayPayload);
             rs = ps.executeQuery();
             rs.next();
             return rs.getString("session_id");
@@ -57,7 +59,7 @@ public class EsignSessionRepository {
             con = pool.getConnection();
             ps = con.prepareStatement("SELECT session_id, document_id, signer_id, provider_id, transaction_id, " +
                     "prepared_storage_key, byte_range_0, byte_range_1, byte_range_2, byte_range_3, " +
-                    "signature_field_name, status, gateway_url FROM esign_sessions " +
+                    "signature_field_name, status, gateway_url, gateway_payload FROM esign_sessions " +
                     "WHERE provider_id = ? AND transaction_id = ?");
             ps.setString(1, providerId);
             ps.setString(2, transactionId);
@@ -81,7 +83,7 @@ public class EsignSessionRepository {
             con = pool.getConnection();
             ps = con.prepareStatement("SELECT session_id, document_id, signer_id, provider_id, transaction_id, " +
                     "prepared_storage_key, byte_range_0, byte_range_1, byte_range_2, byte_range_3, " +
-                    "signature_field_name, status, gateway_url FROM esign_sessions " +
+                    "signature_field_name, status, gateway_url, gateway_payload FROM esign_sessions " +
                     "WHERE signer_id = ?::uuid AND status = 'INITIATED' ORDER BY created_at DESC LIMIT 1");
             ps.setString(1, signerId);
             rs = ps.executeQuery();
@@ -95,7 +97,7 @@ public class EsignSessionRepository {
     }
 
     /**
-     * Multi-signature documents (prep/TSI-Sign-Multi-Signature-Documents-Plan.md
+     * Multi-signature documents (docs/architecture.md §6.4
      * §4): guards against a Corporate Seal call racing an in-flight Aadhaar
      * eSign session for a *different* signer on the same document.
      */
@@ -108,7 +110,7 @@ public class EsignSessionRepository {
             con = pool.getConnection();
             ps = con.prepareStatement("SELECT session_id, document_id, signer_id, provider_id, transaction_id, " +
                     "prepared_storage_key, byte_range_0, byte_range_1, byte_range_2, byte_range_3, " +
-                    "signature_field_name, status, gateway_url FROM esign_sessions " +
+                    "signature_field_name, status, gateway_url, gateway_payload FROM esign_sessions " +
                     "WHERE document_id = ?::uuid AND status = 'INITIATED' ORDER BY created_at DESC LIMIT 1");
             ps.setString(1, documentId);
             rs = ps.executeQuery();
@@ -147,6 +149,7 @@ public class EsignSessionRepository {
         return new EsignSessionRecord(
                 rs.getString("session_id"), rs.getString("document_id"), rs.getString("signer_id"),
                 rs.getString("provider_id"), rs.getString("transaction_id"), rs.getString("prepared_storage_key"),
-                byteRange, rs.getString("signature_field_name"), rs.getString("status"), rs.getString("gateway_url"));
+                byteRange, rs.getString("signature_field_name"), rs.getString("status"), rs.getString("gateway_url"),
+                rs.getString("gateway_payload"));
     }
 }

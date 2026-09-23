@@ -1,4 +1,4 @@
--- Multi-Signature Documents (prep/TSI-Sign-Multi-Signature-Documents-Plan.md)
+-- Multi-Signature Documents (docs/architecture.md §6.4)
 --
 -- A document that has collected one of several independent signers' seals
 -- but not all of them yet is neither DRAFT (nothing signed) nor SIGNED

@@ -12,7 +12,8 @@ import org.tsicoop.sign.framework.InputProcessor;
 import org.tsicoop.sign.framework.OutputProcessor;
 import org.tsicoop.sign.esign.EsignSessionRepository;
 import org.tsicoop.sign.esign.ExternalCmsSpliceService;
-import org.tsicoop.sign.esign.MockAadhaarEsignAdapter;
+import org.tsicoop.sign.esign.ESignAdapter;
+import org.tsicoop.sign.esign.ESignAdapterRegistry;
 import org.tsicoop.sign.esign.SigningSessionRequest;
 import org.tsicoop.sign.esign.SigningSessionResponse;
 import org.tsicoop.sign.pki.LocalKeyStoreProvider;
@@ -68,22 +69,14 @@ public class Documents implements Action {
     private final LegalCertificateService legalCertificateService;
     private final EsignSessionRepository esignSessionRepository = new EsignSessionRepository();
     private final ExternalCmsSpliceService externalCmsSpliceService = new ExternalCmsSpliceService();
-    private final MockAadhaarEsignAdapter mockAadhaarEsignAdapter;
 
     public Documents() {
         try {
             signingService = new LocalPkiSigningService(new LocalKeyStoreProvider());
-            mockAadhaarEsignAdapter = new MockAadhaarEsignAdapter(new LocalKeyStoreProvider(), consoleBaseUrl());
         } catch (Exception e) {
             throw new RuntimeException("Failed to initialize Local PKI signing service", e);
         }
         legalCertificateService = new LegalCertificateService(signingService);
-    }
-
-    /** Base URL the mock ESP's gatewayUrl is built against - overridable for non-default deployments. */
-    private static String consoleBaseUrl() {
-        String configured = System.getenv("CONSOLE_BASE_URL");
-        return configured != null ? configured : "http://localhost:8088/console";
     }
 
     /**
@@ -302,7 +295,7 @@ public class Documents implements Action {
                     "Another signature was just applied to this document - retry against the current version.");
             return;
         }
-        documentRepository.insertSeal(documentId, signerId, "local_pki", keyAlias, null, null, "PAdES-B-B", null, null);
+        documentRepository.insertSeal(documentId, signerId, "local_pki", keyAlias, null, null, sealed.signatureStandard(), null, null);
 
         String actorType = appContext != null ? "APP" : "PLATFORM_USER";
         String actorId = appContext != null ? appContext.appId() : InputProcessor.getUserId(req);
@@ -311,7 +304,7 @@ public class Documents implements Action {
 
         ObjectNode json = MAPPER.createObjectNode();
         json.put("status", newStatus);
-        json.put("signatureStandard", "PAdES-B-B");
+        json.put("signatureStandard", sealed.signatureStandard());
         json.put("sealedAt", Instant.now().toString());
         json.put("sha256Checksum", sealed.sha256Hash());
         OutputProcessor.send(res, HttpServletResponse.SC_OK, json);
@@ -325,7 +318,7 @@ public class Documents implements Action {
     }
 
     /**
-     * Multi-signature documents (prep/TSI-Sign-Multi-Signature-Documents-Plan.md):
+     * Multi-signature documents (docs/architecture.md §6.4):
      * resolves the document_signers row for signerName, opportunistically
      * registering a PENDING placeholder row for every *other* still-blank
      * [[TSI_SIGNATURE:name]] marker found in the current bytes, so later
@@ -392,12 +385,13 @@ public class Documents implements Action {
     }
 
     /**
-     * Starts an Aadhaar eSign session (prep/TSI-Sign-Aadhaar-eSign-Plan.md):
+     * Starts an Aadhaar eSign session (see README "eSign providers"):
      * reserves signature space in the PDF, persists just the bytes/offsets
      * needed to finish later (never a live PDFBox object - see
      * ExternalCmsSpliceService), and hands back a gatewayUrl for the
      * calling App to redirect its own end-user to for OTP/biometric auth.
-     * Only the mock adapter is wired up in this deployment (Phase 1).
+     * The adapter comes from {@link ESignAdapterRegistry} (request providerId, else
+     * the App's default_provider_id, else the deployment default).
      */
     private void initiateEsign(HttpServletRequest req, HttpServletResponse res, JsonNode body, AppContext appContext)
             throws Exception {
@@ -470,6 +464,16 @@ public class Documents implements Action {
         String signerPhone = body.path("signerPhone").asText(null);
         String reason = body.path("reason").asText(null);
 
+        ESignAdapter esignAdapter;
+        try {
+            String appDefaultProviderId = appRepository.findById(appId)
+                    .map(AppRepository.AppRecord::defaultProviderId).orElse(null);
+            esignAdapter = ESignAdapterRegistry.resolveForInitiate(body.path("providerId").asText(null), appDefaultProviderId);
+        } catch (IllegalArgumentException e) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request", e.getMessage());
+            return;
+        }
+
         DocumentStorageProvider storageProvider;
         try {
             storageProvider = StorageProviderRegistry.resolve(document.storageProviderId());
@@ -483,7 +487,7 @@ public class Documents implements Action {
         byte[] currentBytes = storageProvider.retrieve(currentRef);
 
         ExternalCmsSpliceService.PreparedSigning prepared = externalCmsSpliceService.prepare(
-                currentBytes, "Aadhaar eSign (Mock ESP)", signerName, reason, signerName);
+                currentBytes, esignAdapter.getDisplayName(), signerName, reason, signerName);
 
         String signerId;
         try {
@@ -495,12 +499,12 @@ public class Documents implements Action {
         StorageObjectRef preparedRef = storageProvider.store(appSlug, documentId, "pending-esign", prepared.contentToHash());
 
         SigningSessionRequest sessionRequest = new SigningSessionRequest(documentId, appId, signerName, signerEmail,
-                signerPhone, HashUtil.sha256Hex(currentBytes), reason);
-        SigningSessionResponse sessionResponse = mockAadhaarEsignAdapter.initiateSigning(sessionRequest);
+                signerPhone, HashUtil.sha256Hex(prepared.contentToHash()), reason);
+        SigningSessionResponse sessionResponse = esignAdapter.initiateSigning(sessionRequest);
 
-        esignSessionRepository.create(documentId, signerId, MockAadhaarEsignAdapter.PROVIDER_ID,
+        esignSessionRepository.create(documentId, signerId, esignAdapter.getProviderId(),
                 sessionResponse.transactionId(), preparedRef.storageKey(), prepared.byteRange(),
-                prepared.signatureFieldName(), sessionResponse.gatewayUrl());
+                prepared.signatureFieldName(), sessionResponse.gatewayUrl(), sessionResponse.gatewayPayload());
 
         documentRepository.markPending(documentId);
 

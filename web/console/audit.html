@@ -61,12 +61,18 @@
                         <option value="ESIGN_INITIATED">eSign Initiated</option>
                         <option value="ESIGN_COMPLETED">eSign Completed</option>
                         <option value="ESIGN_DENIED">eSign Denied</option>
+                        <option value="ESIGN_CALLBACK_REJECTED">eSign Callback Rejected</option>
                         <option value="DOCUMENT_ARCHIVED">Document Archived</option>
                         <option value="DOCUMENT_UNARCHIVED">Document Unarchived</option>
                         <option value="LEGAL_CERTIFICATE_GENERATED">Legal Certificate Generated</option>
                     </select>
                 </div>
+                <div>
+                    <label>Tamper-evidence</label>
+                    <button type="button" class="btn secondary" id="verify-btn">Verify integrity of selected App</button>
+                </div>
             </div>
+            <p id="verify-result" class="muted" style="margin:10px 0 0;"></p>
         </div>
 
         <div class="panel">
@@ -129,6 +135,20 @@
         }
 
         document.getElementById("app-filter").addEventListener("change", () => loadAuditLogs(1));
+        document.getElementById("verify-btn").addEventListener("click", async () => {
+            const out = document.getElementById("verify-result");
+            const appId = document.getElementById("app-filter").value;
+            if (!appId) { out.textContent = "Select an App first - each App has its own chain."; return; }
+            out.textContent = "Verifying...";
+            try {
+                const r = await tsiCall("/api/v1/admin/audit-logs", "verify_chain", { appId });
+                out.textContent = r.intact
+                    ? `Intact: ${r.entriesChecked} chained entries verified. Head hash ${r.headHash || "(none yet)"} - record it outside this database to also detect removal of the newest entries.`
+                    : `BROKEN after ${r.entriesChecked} verified entries at ${r.brokenAtAuditId}: ${r.reason}`;
+            } catch (e) {
+                out.textContent = e.message;
+            }
+        });
         document.getElementById("event-filter").addEventListener("change", () => loadAuditLogs(1));
 
         (async function init() {

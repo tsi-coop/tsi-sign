@@ -1,5 +1,5 @@
 -- TSI Aadhaar eSign — transient session state for the async, redirect-based
--- signing flow (prep/TSI-Sign-Aadhaar-eSign-Plan.md). Kept separate from
+-- signing flow (see README "eSign providers"). Kept separate from
 -- the audit-facing document_signers/document_seals tables (V1): this table
 -- only exists to survive the gap between "we reserved a signature slot and
 -- sent the hash to the ESP" and "the ESP called us back" — it holds the
@@ -11,7 +11,7 @@ CREATE TABLE esign_sessions (
     session_id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     document_id           UUID NOT NULL REFERENCES documents(document_id) ON DELETE CASCADE,
     signer_id             UUID NOT NULL REFERENCES document_signers(signer_id) ON DELETE CASCADE,
-    provider_id            VARCHAR(50) NOT NULL,        -- emudhra | cdac | mock_aadhaar
+    provider_id            VARCHAR(50) NOT NULL,        -- sandbox | emudhra | cdac | ...
     transaction_id          VARCHAR(255) NOT NULL,
     prepared_storage_key    TEXT NOT NULL,               -- placeholder-PDF bytes, via DocumentStorageProvider
     byte_range_0            BIGINT NOT NULL,

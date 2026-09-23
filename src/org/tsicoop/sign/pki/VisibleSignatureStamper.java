@@ -21,7 +21,7 @@ import java.util.List;
  * Draws the visible Corporate Seal stamp (a plain text block: signer,
  * who triggered it, reason, date) at a located
  * {@code [[TSI_SIGNATURE:name]]} marker - see
- * prep/TSI-Sign-Visible-Signature-Placeholder-Plan.md.
+ * docs/architecture.md §6.1.
  *
  * <p>Exactly one placeholder per document becomes the real interactive
  * {@code PDSignature} widget ({@link #buildSignatureAppearance}, merged in

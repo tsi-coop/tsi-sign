@@ -20,7 +20,7 @@ import java.util.UUID;
 
 /**
  * The async, two-phase signing mechanic Aadhaar eSign needs and Corporate
- * Seal doesn't (prep/TSI-Sign-Aadhaar-eSign-Plan.md, "The hard part").
+ * Seal doesn't (the reason this class exists - see below).
  *
  * <p>Verified against PDFBox 3.0.6's own source
  * ({@code COSWriter.doWriteSignature}/{@code writeExternalSignature}):
@@ -65,7 +65,7 @@ public class ExternalCmsSpliceService {
      * @param targetPlaceholderName null: every located marker gets stamped -
      *                              first becomes the real widget, the rest
      *                              plain overlay stamps (today's behavior).
-     *                              Non-null (prep/TSI-Sign-Multi-Signature-Documents-Plan.md):
+     *                              Non-null (docs/architecture.md §6.4):
      *                              only that one named marker becomes the
      *                              real widget; every other marker is left
      *                              completely untouched for a later signer.

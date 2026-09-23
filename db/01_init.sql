@@ -95,7 +95,7 @@ CREATE INDEX idx_documents_app ON documents(app_id, created_at DESC);
 CREATE INDEX idx_documents_template ON documents(template_id);
 
 -- 7. DOCUMENT SIGNERS — one row per party a document is routed to for
--- signature (Technical Architecture doc's SignerIdentity / signers[] shape).
+-- signature (original Technical Architecture doc (removed; see git history)'s SignerIdentity / signers[] shape).
 CREATE TABLE document_signers (
     signer_id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     document_id       UUID NOT NULL REFERENCES documents(document_id) ON DELETE CASCADE,

@@ -16,7 +16,7 @@ import java.util.regex.Pattern;
 /**
  * Scans a rendered PDF for {@code [[TSI_SIGNATURE:<name>]]} markers - plain
  * literal text a template author types directly into the HTML template (see
- * prep/TSI-Sign-Visible-Signature-Placeholder-Plan.md) - and records where
+ * docs/architecture.md §6.1) - and records where
  * each named marker landed, so {@link LocalPkiSigningService} can stamp a
  * visible Corporate Seal appearance at that spot. {@code [[TSI_SIGNATURE]]}
  * (no name) is shorthand for {@code [[TSI_SIGNATURE:default]]}.

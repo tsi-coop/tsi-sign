@@ -18,11 +18,18 @@
 # Unlike seal_local, this is a genuinely human-in-the-loop flow:
 #   1. initiate_esign (TENANT, documents) -> a gatewayUrl + transactionId.
 #   2. This script prints that gatewayUrl and tries to open it in your
-#      browser - go there and click Approve (or Deny) on the consent screen
-#      (web/console/mock-esign-consent.html in this deployment; a real ESP
-#      would show its own real OTP/biometric screen instead).
-#   3. This script polls get_esign_status (TENANT, documents) until your
-#      browser action lands.
+#      browser. The page sends you on to the configured CA (in a fresh
+#      install: the bundled TSI eSign Sandbox, a MOCK CA - OTP 123456; a real
+#      CA would show its own Aadhaar OTP/biometric screen), and the CA sends
+#      you back to /esign/return/... once you're done.
+#   3. This script polls get_esign_status (TENANT, documents) until that
+#      lands.
+#
+# Headless mode (CI/demos): ESIGN_AUTOMATE=1 plays the signer's browser
+# itself against the TSI eSign Sandbox - no clicking. It only works with the
+# sandbox (it drives the sandbox's JSON mode). SIMULATE picks the sandbox
+# outcome: ok (default) | deny | expired | esp_error | tampered_hash |
+# bad_signature (the last two are attacks the engine must reject).
 #
 #   API_KEY    = your App's key (same App as scripts 1-3)
 #   API_SECRET = that App's secret
@@ -57,14 +64,42 @@ body="$(jq -n --arg d "$document_id" --arg s "$signer" --arg r "Execution of ${k
 resp="$(api documents "$body")"
 echo "$resp" | jq '{status, transactionId}'
 gateway_url="$(echo "$resp" | jq -r '.gatewayUrl')"
+transaction_id="$(echo "$resp" | jq -r '.transactionId')"
 
-echo "" >&2
-echo "Open this URL to complete the Aadhaar eSign consent step as '$signer':" >&2
-echo "  $gateway_url" >&2
-echo "" >&2
-open_in_browser "$gateway_url"
+# Plays the signer's browser against the TSI eSign Sandbox (ESIGN_AUTOMATE=1).
+automate_sandbox_signing() {
+  local provider payload action msg signdoc txn_key consent response_url return_msg
+  provider="$(echo "$gateway_url" | sed -n 's/.*provider=\([^&]*\).*/\1/p')"
+  payload="$(curl -sS -X POST "$BASE_URL/api/v1/esign/callback" -H 'Content-Type: application/json' \
+    -d "$(jq -n --arg p "$provider" --arg t "$transaction_id" '{_func:"gateway_payload", provider:$p, transactionId:$t}')")"
+  action="$(echo "$payload" | jq -r '.actionUrl')"
+  msg="$(echo "$payload" | jq -r '.fields.msg')"
+  log "sandbox: submitting the signed request (hash only) to $action"
+  signdoc="$(curl -sS -X POST "$action" -H 'Accept: application/json' --data-urlencode "msg=$msg")"
+  txn_key="$(echo "$signdoc" | jq -er '.txnKey')" || { echo "Sandbox rejected the request: $signdoc" >&2; return 1; }
+  log "sandbox: consent (OTP 123456, outcome: ${SIMULATE:-ok})"
+  consent="$(curl -sS -X POST "${action%/form/signdoc}/consent" -H 'Accept: application/json' \
+    --data-urlencode "txnKey=$txn_key" --data-urlencode "otp=123456" --data-urlencode "simulate=${SIMULATE:-ok}" \
+    --data-urlencode "signerName=$signer")"
+  response_url="$(echo "$consent" | jq -r '.responseUrl')"
+  return_msg="$(echo "$consent" | jq -r '.msg')"
+  log "sandbox: returning the signed response to $response_url"
+  curl -sS -X POST "$response_url" --data-urlencode "msg=$return_msg" | sed -e 's/<[^>]*>/ /g' | tr -s ' \n' ' ' >&2
+  echo "" >&2
+}
 
-log "Waiting for you to Approve or Deny in the browser (polling every ${POLL_INTERVAL_SECONDS}s, up to ${POLL_TIMEOUT_SECONDS}s)..."
+if [[ "${ESIGN_AUTOMATE:-0}" == "1" ]]; then
+  automate_sandbox_signing
+else
+
+  echo "" >&2
+  echo "Open this URL to complete the Aadhaar eSign step as '$signer':" >&2
+  echo "  $gateway_url" >&2
+  echo "" >&2
+  open_in_browser "$gateway_url"
+fi
+
+log "Waiting for the signing to complete (polling every ${POLL_INTERVAL_SECONDS}s, up to ${POLL_TIMEOUT_SECONDS}s)..."
 status_body="$(jq -n --arg d "$document_id" '{_func:"get_esign_status", documentId:$d}')"
 elapsed=0
 while true; do
@@ -77,7 +112,7 @@ while true; do
       exit 0
       ;;
     FAILED)
-      echo "Aadhaar eSign for '$signer' was denied or failed." >&2
+      echo "Aadhaar eSign for '$signer' was denied, cancelled or failed." >&2
       exit 1
       ;;
   esac

@@ -182,7 +182,7 @@ public class DocumentRepository {
      * Reverts a PENDING document after a failed/denied eSign attempt, so it
      * can be retried - DRAFT if no signer has completed yet, or
      * PARTIALLY_SIGNED if this was one signer's turn on an otherwise
-     * multi-signature document (prep/TSI-Sign-Multi-Signature-Documents-Plan.md).
+     * multi-signature document (docs/architecture.md §6.4).
      */
     public void markStatus(String documentId, String status) throws Exception {
         Connection con = null;
@@ -200,7 +200,7 @@ public class DocumentRepository {
     }
 
     /**
-     * Optimistic-concurrency seal write (prep/TSI-Sign-Multi-Signature-Documents-Plan.md
+     * Optimistic-concurrency seal write (docs/architecture.md §6.4
      * §5): only applies if sealed_hash still matches what the caller read
      * immediately before sealing - two signers racing to seal at once means
      * the second write fails cleanly (returns false) instead of silently

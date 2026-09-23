@@ -17,7 +17,7 @@ import java.util.Set;
  * that can reach the console can see it: PLATFORM_ADMIN/AUDITOR see every
  * App's events, APP_MANAGER is scoped to their assigned Apps (AUDITOR
  * exists specifically for this kind of read-only visibility). funcs:
- * list_audit_logs.
+ * list_audit_logs, verify_chain (recompute one App's tamper-evidence hash chain).
  */
 public class AuditLogs implements Action {
 
@@ -40,12 +40,36 @@ public class AuditLogs implements Action {
                 case "list_audit_logs":
                     listAuditLogs(req, body, res);
                     break;
+                case "verify_chain":
+                    verifyChain(req, body, res);
+                    break;
                 default:
                     OutputProcessor.errorResponse(res, HttpServletResponse.SC_NOT_FOUND, "Not Found", "Unknown _func: " + func);
             }
         } catch (Exception e) {
             OutputProcessor.errorResponse(res, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error", e.getMessage());
         }
+    }
+
+    private void verifyChain(HttpServletRequest req, JsonNode body, HttpServletResponse res) throws Exception {
+        String appId = body.path("appId").asText(null);
+        if (appId == null) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request", "appId is required.");
+            return;
+        }
+        if ("APP_MANAGER".equals(InputProcessor.getUserRole(req))
+                && !appAdminRepository.listAppIdsForUser(InputProcessor.getUserId(req)).contains(appId)) {
+            OutputProcessor.errorResponse(res, HttpServletResponse.SC_FORBIDDEN, "Forbidden", "You do not have access to this App.");
+            return;
+        }
+        AuditLogRepository.ChainVerification result = auditLogRepository.verifyChain(appId);
+        ObjectNode json = MAPPER.createObjectNode();
+        json.put("intact", result.intact());
+        json.put("entriesChecked", result.entriesChecked());
+        json.put("headHash", result.headHash());
+        json.put("brokenAtAuditId", result.brokenAtAuditId());
+        json.put("reason", result.reason());
+        OutputProcessor.send(res, HttpServletResponse.SC_OK, json);
     }
 
     private void listAuditLogs(HttpServletRequest req, JsonNode body, HttpServletResponse res) throws Exception {

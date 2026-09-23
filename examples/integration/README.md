@@ -41,7 +41,7 @@ want to experience, rather than everything signing at once.
 | 1 | `1_register_templates.sh` | `templates` / `create_template` | Registers all 6 sample templates from `../templates/` |
 | 2 | `2_create_documents.sh` | `templates` / `generate_document` | Renders each template with its matching `../payloads/*.json`, producing a DRAFT PDF per document |
 | 3 | `3_sign_documents.sh <document-key> [signerName]` | `documents` / `seal_local` | Seals the one document/signer you name, via **Corporate Seal** |
-| 4 | `4_sign_via_aadhaar_esign.sh <document-key> [signerName]` | `documents` / `initiate_esign`, then opens your browser for the consent step, then polls `documents` / `get_esign_status` | Signs the one document/signer you name, via **Aadhaar eSign** |
+| 4 | `4_sign_via_aadhaar_esign.sh <document-key> [signerName]` | `documents` / `initiate_esign`, then sends your browser to the CA for the consent step (or `ESIGN_AUTOMATE=1` plays the browser against the bundled sandbox), then polls `documents` / `get_esign_status` | Signs the one document/signer you name, via **Aadhaar eSign** through the configured CA (the bundled *mock* sandbox in a fresh install; OTP `123456`) |
 
 ### Document keys and signers
 
@@ -108,26 +108,36 @@ than shortcutting any of them:
    `wslview`, whichever is on your PATH) - if none of those work in your
    environment (e.g. a headless container or a remote SSH session), just
    copy the printed URL into a browser yourself.
-2. You land on the mock consent screen
-   (`web/console/mock-esign-consent.html`) - a real ESP would show its own
-   real OTP/biometric screen here instead - and click **Approve & Sign**
-   (or **Deny**). That click is what calls the `PUBLIC` `esign/callback`
-   endpoint's `mock_approve`/`mock_deny` func and actually splices the
-   signature into the PDF - the script itself never calls it.
+2. The `gatewayUrl` page (`web/console/esign-redirect.html`) sends your
+   browser on to the configured CA with a signed request carrying only the
+   document hash. In a fresh install that CA is the bundled TSI eSign
+   Sandbox - a **mock**: enter OTP `123456` and choose **Authenticate & sign**
+   (the "simulate" selector lets you cancel or attempt attacks instead). A
+   real CA shows its own Aadhaar OTP/biometric screen here. Either way, the
+   CA then sends your browser back to `POST /esign/return/{provider}/{txn}`,
+   where the response is verified and the signature spliced into the PDF -
+   the script itself never calls it.
 3. The script polls `get_esign_status` (every `POLL_INTERVAL_SECONDS`,
-   default 3s, for up to `POLL_TIMEOUT_SECONDS`, default 300s) until your
-   click lands, then prints the final signer/document status.
+   default 3s, for up to `POLL_TIMEOUT_SECONDS`, default 300s) until that
+   lands, then prints the final signer/document status.
+
+For CI or a demo with no browser, `ESIGN_AUTOMATE=1` makes the script play
+the signer's browser itself against the sandbox (`SIMULATE=deny|expired|
+esp_error|tampered_hash|bad_signature` picks a failure/attack instead of a
+successful signing). This drives the sandbox's JSON mode, so it only works
+with the sandbox, not a real CA.
 
 If you let it time out before clicking anything, the eSign session is still
 open - reopen the printed URL to finish (don't re-run the script while a
 session is pending; `initiate_esign` 409s on top of an active one).
 
-Because `gatewayUrl` is built from `CONSOLE_BASE_URL` (default
-`http://localhost:8088/console`, same default as this script's `BASE_URL`),
-this works out of the box for a local instance. If your instance runs
-somewhere the browser opening this URL can't reach directly (a remote
-Docker host, a devcontainer), set `CONSOLE_BASE_URL` on the server to a
-hostname that machine can resolve before calling `initiate_esign`.
+Because `gatewayUrl` and the CA's return URL are built from
+`PUBLIC_BASE_URL` (default `http://localhost:8088`, same default as this
+script's `BASE_URL`), this works out of the box for a local instance. If your
+instance runs somewhere the browser can't reach directly (a remote Docker
+host, a devcontainer), set `PUBLIC_BASE_URL` - and `ESIGN_SANDBOX_URL`, which
+the browser also has to reach - on the server to a hostname that machine can
+resolve.
 
 ## Re-running
 
