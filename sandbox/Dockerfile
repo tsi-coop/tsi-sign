@@ -9,5 +9,5 @@ FROM eclipse-temurin:17-jre
 RUN useradd --system --create-home sandbox && mkdir -p /data/ca && chown sandbox:sandbox /data/ca
 COPY --from=build /build/target/tsi_esign_sandbox.jar /app/sandbox.jar
 USER sandbox
-EXPOSE 8090
+EXPOSE 8091
 CMD ["java", "-jar", "/app/sandbox.jar"]

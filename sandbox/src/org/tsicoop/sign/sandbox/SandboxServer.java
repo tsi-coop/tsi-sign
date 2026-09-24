@@ -42,7 +42,7 @@ import java.util.regex.Pattern;
  *   POST /tsa                      RFC 3161 request               -> RFC 3161 response
  *   GET  /ca/root.pem  /ca/esp.pem  /health
  * </pre>
- * Config (env): PORT (8090), SANDBOX_CA_DIR (persist CA; else in-memory), SANDBOX_STRICT_ASP (true: only
+ * Config (env): PORT (8091), SANDBOX_CA_DIR (persist CA; else in-memory), SANDBOX_STRICT_ASP (true: only
  * registered ASPs; default false: any ASP whose request signature is internally valid),
  * SANDBOX_TXN_TTL_SECONDS (600). OTP 123456 succeeds; the consent page's "simulate" selector drives failure modes.
  */
@@ -74,7 +74,7 @@ public class SandboxServer {
         SandboxServer server = new SandboxServer(ca,
                 "true".equalsIgnoreCase(System.getenv("SANDBOX_STRICT_ASP")),
                 Long.parseLong(envOr("SANDBOX_TXN_TTL_SECONDS", "600")));
-        int port = Integer.parseInt(envOr("PORT", "8090"));
+        int port = Integer.parseInt(envOr("PORT", "8091"));
         server.start(port);
         System.out.println("TSI eSign Sandbox listening on :" + server.port() + " (strictAsp=" + server.strictAsp + ")");
         System.out.println("NOT FOR PRODUCTION. Root CA: " + ca.rootCert.getSubjectX500Principal());
