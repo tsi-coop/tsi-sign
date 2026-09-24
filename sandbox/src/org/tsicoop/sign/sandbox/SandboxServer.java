@@ -310,11 +310,11 @@ public class SandboxServer {
                 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
                 <title>TSI eSign Sandbox</title>
                 <style>body{font-family:system-ui,sans-serif;background:#f3f7f8;color:#172033;display:flex;justify-content:center;padding:32px 16px}
-                .card{background:#fff;border:1px solid #d9e2ec;border-top:4px solid #b7791f;border-radius:12px;padding:28px;max-width:440px;width:100%}
+                .card{background:#fff;border:1px solid #d9e2ec;border-top:4px solid #b7791f;border-radius:12px;padding:28px;max-width:440px;width:100%%}
                 .banner{background:#fff8e1;border:1px solid #ffe9a8;color:#7a5b00;border-radius:8px;padding:8px 12px;font-size:12.5px;font-weight:700;margin-bottom:16px}
                 label{display:block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#607086;margin:14px 0 4px}
-                input,select{width:100%;box-sizing:border-box;padding:10px;border:1px solid #d9e2ec;border-radius:6px;font:inherit}
-                button{margin-top:20px;width:100%;padding:12px;border:0;border-radius:7px;background:#006a67;color:#fff;font-weight:800;cursor:pointer}
+                input,select{width:100%%;box-sizing:border-box;padding:10px;border:1px solid #d9e2ec;border-radius:6px;font:inherit}
+                button{margin-top:20px;width:100%%;padding:12px;border:0;border-radius:7px;background:#006a67;color:#fff;font-weight:800;cursor:pointer}
                 code{word-break:break-all;font-size:12px}</style></head><body><div class="card">
                 <div class="banner">SANDBOX - a mock ESP/CA. Not a real Aadhaar authentication. OTP: 123456</div>
                 <h2 style="margin:0 0 4px">Aadhaar eSign consent</h2>
