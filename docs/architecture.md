@@ -189,7 +189,7 @@ Not built: an eSign Providers & PKI screen (providers are configured by environm
 
 ## 9. Deployment and configuration
 
-`docker compose up -d` starts Postgres, the app on Jetty (host port 8088) and the eSign sandbox (8090). Configuration is environment variables; the full list is in the README. Groups: database and JWT; storage (`STORAGE_*`, `S3_*`, `PRIVACY_VAULT_*`, overridable live in System Settings); local seal keystore (`KEYSTORE_*`, `DEFAULT_KEY_ALIAS`); eSign (`PUBLIC_BASE_URL`, `DEFAULT_ESIGN_PROVIDER_ID`, `ESIGN_<P>_URL|ASP_ID|ESP_CERT|TRUST_CERTS|ASP_KEY_ALIAS|VERSION|AUTH_MODE`); timestamping (`TSA_*`). `PUBLIC_BASE_URL` must be reachable **by the signer's browser**, because the browser carries both legs of an eSign. The image bakes in a self-signed dev seal key (`tsi_corporate_seal`) and a dev ASP key (`tsi_asp_signing`); replace both for anything real.
+`docker compose up -d` starts Postgres, the app on Jetty (host port 8088) and the eSign sandbox (8091). Configuration is environment variables; the full list is in the README. Groups: database and JWT; storage (`STORAGE_*`, `S3_*`, `PRIVACY_VAULT_*`, overridable live in System Settings); local seal keystore (`KEYSTORE_*`, `DEFAULT_KEY_ALIAS`); eSign (`PUBLIC_BASE_URL`, `DEFAULT_ESIGN_PROVIDER_ID`, `ESIGN_<P>_URL|ASP_ID|ESP_CERT|TRUST_CERTS|ASP_KEY_ALIAS|VERSION|AUTH_MODE`); timestamping (`TSA_*`). `PUBLIC_BASE_URL` must be reachable **by the signer's browser**, because the browser carries both legs of an eSign. The image bakes in a self-signed dev seal key (`tsi_corporate_seal`) and a dev ASP key (`tsi_asp_signing`); replace both for anything real.
 
 ## 10. Testing
 
@@ -218,6 +218,4 @@ Not built: an eSign Providers & PKI screen (providers are configured by environm
 | Public verification endpoint / QR stamp | Removed by choice (§6.1) |
 | Per-signer notifications | The per-completion webhook is enough for an App to build them |
 
-**Open decisions:** whether Platform Admins should publish shared starter templates Apps can clone; a mandatory key-rotation interval versus rotation on demand; a single deployment-wide certifying officer key versus one per App; what a specific CA's ASP onboarding issues and which CCA API track it uses; whether GCS interop covers CMEK needs.
 
-**History.** The original design (Aug 2026) planned an eMudhra-first adapter and an in-process mock. When ASP onboarding stalled, the design was recast as vendor-agnostic (bring your own CA) with one generic adapter and a protocol-level sandbox. The earlier planning documents were folded into this one; see git history (`prep/`, before this consolidation) for their original text. Older code comments that cite bare section numbers or "Chunk N" (e.g. "§10.9") refer to that original plan, not to this document; comments that cite "docs/architecture.md §…" refer to this one.

@@ -66,7 +66,7 @@ services:
       TSA_URL: "${TSA_URL:-}"
       TSA_TRUST_CERTS: "${TSA_TRUST_CERTS:-}"
       TSA_REQUIRED: "${TSA_REQUIRED:-false}"
-      ESIGN_SANDBOX_URL: "${ESIGN_SANDBOX_URL:-http://localhost:8090/esign/2.1/form/signdoc}"
+      ESIGN_SANDBOX_URL: "${ESIGN_SANDBOX_URL:-http://localhost:8091/esign/2.1/form/signdoc}"
       ESIGN_SANDBOX_ASP_ID: "${ESIGN_SANDBOX_ASP_ID:-TSI-SANDBOX-ASP}"
       ESIGN_SANDBOX_TRUST_CERTS: /etc/tsi-sign/sandbox-ca/root.pem
       ESIGN_SANDBOX_ESP_CERT: /etc/tsi-sign/sandbox-ca/esp.pem
@@ -91,9 +91,9 @@ services:
     container_name: tsi_sign_esign_sandbox
     restart: unless-stopped
     ports:
-      - "${SANDBOX_PORT_MAP:-8090:8090}"
+      - "${SANDBOX_PORT_MAP:-8091:8091}"
     environment:
-      PORT: "8090"
+      PORT: "8091"
       SANDBOX_CA_DIR: /data/ca
     volumes:
       - sandbox_ca:/data/ca

@@ -49,7 +49,7 @@ import static org.junit.Assert.assertTrue;
  * Drives {@link CcaEsignAdapter} against a RUNNING sandbox (sandbox/, `java -jar
  * sandbox/target/tsi_esign_sandbox.jar`) - the full ASP-side protocol round trip, ending in a real
  * PDF whose embedded signature is independently verified. Skipped unless SANDBOX_URL is set:
- * {@code SANDBOX_URL=http://localhost:8090 mvn test -Dtest=CcaEsignAdapterSandboxTest}.
+ * {@code SANDBOX_URL=http://localhost:8091 mvn test -Dtest=CcaEsignAdapterSandboxTest}.
  * Proves protocol mechanics against the sandbox only - not compatibility with any real CA.
  */
 public class CcaEsignAdapterSandboxTest {

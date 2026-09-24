@@ -1,6 +1,8 @@
 # TSI Sign
 
-An open-source, self-hosted document execution engine. Bring your own CCA-licensed CA for eSign.
+An open-source, privacy-by-design document execution engine. Bring your own CCA-licensed CA for eSign.
+
+> **Note:** TSI Sign is experimental at this stage and still evolving.
 
 TSI Sign generates documents from HTML templates, routes them for signature (a local organisation seal, or an Aadhaar eSign through *whichever* CCA-licensed CA you contract with), and records everything in a hash-chained audit trail. It is structured around **Apps** (e.g. a Loan App, an HRMS App) that each get their own API key, template namespace, and signer pool on one shared engine.
 
@@ -52,7 +54,7 @@ On first start against a fresh Postgres volume, the numbered scripts in `db/` ru
 | `ESIGN_<PROVIDER>_*` | - | Per-CA settings: `URL`, `ASP_ID`, `TRUST_CERTS`, `ESP_CERT`, ... (see below) |
 | `TSA_URL`, `TSA_TRUST_CERTS`, `TSA_REQUIRED` | unset | Optional RFC 3161 time-stamping: upgrades signatures from PAdES-B-B to B-T |
 | `APP_PORT_MAP` | `8088:8080` | Host:container port mapping |
-| `SANDBOX_PORT_MAP` | `8090:8090` | Host:container port mapping of the bundled eSign sandbox |
+| `SANDBOX_PORT_MAP` | `8091:8091` | Host:container port mapping of the bundled eSign sandbox |
 | `DB_PORT_MAP` | `5440:5432` | PostgreSQL port mapping |
 
 Ports default to 8088/5440 rather than the usual 8080/5432 so TSI Sign can run alongside other TSI products on the same evaluation host without colliding.
@@ -126,7 +128,7 @@ Nothing in this repository has been tested against a real CCA-licensed CA. The s
 
 ### The eSign sandbox
 
-`sandbox/` is a small standalone service (`docker compose up` starts it as `esign_sandbox`, port 8090) that plays a CCA-licensed ESP *and its CA*: it verifies your signed request, shows an OTP consent page (OTP `123456`), issues a short-lived signer certificate from its own root CA, signs the hash, and returns a signed response. It also runs an RFC 3161 time-stamp authority at `/tsa`. On the consent page you can simulate: user cancels, expired transaction, ESP error, and two *attacks* the engine must reject (the ESP signing a different hash; a response signed by a certificate that merely chains to the CA). Its root and ESP certificates are published at `/ca/root.pem` / `/ca/esp.pem` (and to a shared volume in compose) for the `sandbox` provider to trust and pin.
+`sandbox/` is a small standalone service (`docker compose up` starts it as `esign_sandbox`, port 8091) that plays a CCA-licensed ESP *and its CA*: it verifies your signed request, shows an OTP consent page (OTP `123456`), issues a short-lived signer certificate from its own root CA, signs the hash, and returns a signed response. It also runs an RFC 3161 time-stamp authority at `/tsa`. On the consent page you can simulate: user cancels, expired transaction, ESP error, and two *attacks* the engine must reject (the ESP signing a different hash; a response signed by a certificate that merely chains to the CA). Its root and ESP certificates are published at `/ca/root.pem` / `/ca/esp.pem` (and to a shared volume in compose) for the `sandbox` provider to trust and pin.
 
 **It is a development fixture, not a CA anyone should trust.** Its signatures show as "issuer isn't trusted" in PDF viewers by design. Remove the `esign_sandbox` service and `DEFAULT_ESIGN_PROVIDER_ID` before pointing a deployment at a real CA.
 
@@ -134,7 +136,7 @@ Nothing in this repository has been tested against a real CCA-licensed CA. The s
 # adapter <-> sandbox integration tests (skipped unless SANDBOX_URL is set)
 (cd sandbox && mvn package)            # runs the sandbox's own tests, builds the jar
 java -jar sandbox/target/tsi_esign_sandbox.jar &
-SANDBOX_URL=http://localhost:8090 mvn test
+SANDBOX_URL=http://localhost:8091 mvn test
 ```
 
 Upgrading an existing database: `docker exec -i tsi_sign_postgres psql -U tsi_sign_admin tsi_sign < db/10_esign_gateway_payload.sql` (and `db/11_audit_hash_chain.sql`) - the numbered scripts only run automatically on a fresh volume.
