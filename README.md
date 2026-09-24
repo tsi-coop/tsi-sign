@@ -17,7 +17,7 @@ TSI Sign generates documents from HTML templates, routes them for signature (a l
 2. **Plug in a CA**: put your ASP ID, ASP request-signing key, and the CA's certificates in the `ESIGN_<PROVIDER>_*` settings ([details](#esign-providers-bring-your-own-ca)) - or keep the bundled *mock* sandbox to try it out.
 3. **Sign**: individuals through Aadhaar eSign via your CA, and system-generated documents with your own organisation seal - each with an audit trail.
 
-### What it is - and isn't - today
+### Current status
 
 * **Corporate Seal** is a local `.p12` seal from a self-signed or private-CA certificate. It proves the document came from your system and hasn't changed (IT Act s.3); it does **not** bind a legal identity, and it is **not** a Class 3 certificate. Hardware-token/HSM sealing is not supported.
 * **Aadhaar eSign** is implemented once, generically, against the CCA eSign API and verified end to end **only against the bundled mock sandbox**. It has not been tested against any real CA yet - see the [provider status table](#esign-providers-bring-your-own-ca).
