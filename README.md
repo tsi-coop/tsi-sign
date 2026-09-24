@@ -38,24 +38,26 @@ On first start against a fresh Postgres volume, the numbered scripts in `db/` ru
 ### Environment variables
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+|---|---|---|
 | `POSTGRES_DB` | `tsi_sign` | Database name |
 | `POSTGRES_USER` | `tsi_sign_admin` | Database user |
 | `POSTGRES_PASSWD` | `secure_dev_password` | Database password |
 | `TSI_SIGN_ENV` | `local` | Deployment environment tag |
-| `STORAGE_LOCAL_FS_PATH` | `/data/tsi-sign/documents` | Mount path for the local_fs document storage backend (§5.1) |
-| `KEYSTORE_PATH` | `/etc/tsi-sign/keystore.p12` | Local PKI KeyStore for `seal_local` (§7); the image bakes in a self-signed dev keypair here |
+| `STORAGE_LOCAL_FS_PATH` | `/data/tsi-sign/documents` | Mount path for the `local_fs` document storage backend (§5.1) |
+| `KEYSTORE_PATH` | `/etc/tsi-sign/keystore.p12` | Local KeyStore for `seal_local` (§7). The image bakes in a self-signed dev keypair here |
 | `KEYSTORE_TYPE` | `PKCS12` | KeyStore format |
-| `KEYSTORE_PASSWORD` | `changeit` | KeyStore/key password (**change for anything beyond local evaluation**) |
-| `DEFAULT_KEY_ALIAS` | `tsi_corporate_seal` | Fallback keyAlias for `seal_local` when neither the request nor the App's Signing Defaults specify one - lets a fresh install seal with zero per-App setup. Set to an empty string to require every App to configure its own key explicitly. |
-| `JWT_SECRET` | `dev_insecure_jwt_secret_change_in_production` | Signs admin-console session JWTs (§10, matches tsi-compass's `JWTUtil`) - a stateless session that survives a server restart, unlike a plain `HttpSession`. **Change for anything beyond local evaluation**; the app fails fast at first login if unset. |
-| `PUBLIC_BASE_URL` | `http://localhost:8088` | Browser-reachable URL of this server. The eSign redirect page and the CA's return URL are built from it - the signer's browser carries both legs of an eSign. |
+| `KEYSTORE_PASSWORD` | `changeit` | KeyStore/key password. **Change for anything beyond local evaluation** |
+| `DEFAULT_KEY_ALIAS` | `tsi_corporate_seal` | Fallback key alias for `seal_local` when neither the request nor the App's Signing Defaults set one, so a fresh install can seal with zero per-App setup. Set to empty to require every App to configure its own key |
+| `JWT_SECRET` | *(dev value)* | Signs admin-console session JWTs (§10, matches tsi-compass's `JWTUtil`), giving a stateless session that survives a restart. **Change for anything beyond local evaluation**; the app fails fast at first login if unset |
+| `PUBLIC_BASE_URL` | `http://localhost:8088` | Browser-reachable URL of this server. The eSign redirect page and the CA's return URL are built from it, since the signer's browser carries both legs of an eSign |
 | `DEFAULT_ESIGN_PROVIDER_ID` | `sandbox` | eSign provider used when neither the request nor the App names one (see [eSign providers](#esign-providers-bring-your-own-ca)) |
 | `ESIGN_<PROVIDER>_*` | - | Per-CA settings: `URL`, `ASP_ID`, `TRUST_CERTS`, `ESP_CERT`, ... (see below) |
 | `TSA_URL`, `TSA_TRUST_CERTS`, `TSA_REQUIRED` | unset | Optional RFC 3161 time-stamping: upgrades signatures from PAdES-B-B to B-T |
 | `APP_PORT_MAP` | `8088:8080` | Host:container port mapping |
 | `SANDBOX_PORT_MAP` | `8091:8091` | Host:container port mapping of the bundled eSign sandbox |
 | `DB_PORT_MAP` | `5440:5432` | PostgreSQL port mapping |
+
+The `JWT_SECRET` default is `dev_insecure_jwt_secret_change_in_production`.
 
 Ports default to 8088/5440 rather than the usual 8080/5432 so TSI Sign can run alongside other TSI products on the same evaluation host without colliding.
 
