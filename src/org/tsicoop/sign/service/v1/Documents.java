@@ -14,7 +14,6 @@ import org.tsicoop.sign.esign.EsignSessionRepository;
 import org.tsicoop.sign.esign.ExternalCmsSpliceService;
 import org.tsicoop.sign.esign.ESignAdapter;
 import org.tsicoop.sign.esign.ESignAdapterRegistry;
-import org.tsicoop.sign.esign.legacyintegration.DocumentUploadEsignAdapter;
 import org.tsicoop.sign.esign.SigningSessionRequest;
 import org.tsicoop.sign.esign.SigningSessionResponse;
 import org.tsicoop.sign.pki.LocalKeyStoreProvider;
@@ -487,12 +486,6 @@ public class Documents implements Action {
         StorageObjectRef currentRef = currentVariantRef(document);
         byte[] currentBytes = storageProvider.retrieve(currentRef);
 
-        if (esignAdapter instanceof DocumentUploadEsignAdapter uploadAdapter) { // LEGACY INTEGRATION
-            initiateDocumentUploadEsign(req, res, appContext, uploadAdapter, appId, appSlug, document, storageProvider,
-                    currentBytes, signerName, signerEmail, signerPhone, reason);
-            return;
-        }
-
         ExternalCmsSpliceService.PreparedSigning prepared = externalCmsSpliceService.prepare(
                 currentBytes, esignAdapter.getDisplayName(), signerName, reason, signerName);
 
@@ -513,45 +506,6 @@ public class Documents implements Action {
                 sessionResponse.transactionId(), preparedRef.storageKey(), prepared.byteRange(),
                 prepared.signatureFieldName(), sessionResponse.gatewayUrl(), sessionResponse.gatewayPayload());
 
-        documentRepository.markPending(documentId);
-
-        String actorType = appContext != null ? "APP" : "PLATFORM_USER";
-        String actorId = appContext != null ? appContext.appId() : InputProcessor.getUserId(req);
-        auditLogRepository.log(appId, documentId, "ESIGN_INITIATED", actorType, actorId,
-                req.getRemoteAddr(), req.getHeader("User-Agent"));
-
-        ObjectNode json = MAPPER.createObjectNode();
-        json.put("status", "INITIATED");
-        json.put("transactionId", sessionResponse.transactionId());
-        json.put("gatewayUrl", sessionResponse.gatewayUrl());
-        OutputProcessor.send(res, HttpServletResponse.SC_OK, json);
-    }
-
-    /**
-     * LEGACY INTEGRATION: the document-upload variant of the tail of {@link #initiateEsign} - no signature
-     * space is reserved (the CA signs the PDF itself), so the exact bytes sent are what's stored as the
-     * "prepared" copy, and the byte-range columns are zero placeholders.
-     */
-    private void initiateDocumentUploadEsign(HttpServletRequest req, HttpServletResponse res, AppContext appContext,
-            DocumentUploadEsignAdapter adapter, String appId, String appSlug, DocumentRepository.DocumentRecord document,
-            DocumentStorageProvider storageProvider, byte[] currentBytes, String signerName, String signerEmail,
-            String signerPhone, String reason) throws Exception {
-        String documentId = document.documentId();
-        String signerId;
-        try {
-            signerId = resolveSignerRow(documentId, currentBytes, signerName, "AADHAAR_OTP", signerEmail, signerPhone);
-        } catch (IllegalArgumentException e) {
-            OutputProcessor.errorResponse(res, HttpServletResponse.SC_BAD_REQUEST, "Bad Request", e.getMessage());
-            return;
-        }
-        StorageObjectRef sentRef = storageProvider.store(appSlug, documentId, "pending-esign", currentBytes);
-        SigningSessionRequest sessionRequest = new SigningSessionRequest(documentId, appId, signerName, signerEmail,
-                signerPhone, HashUtil.sha256Hex(currentBytes), reason);
-        SigningSessionResponse sessionResponse = adapter.initiateWithDocument(sessionRequest, currentBytes);
-
-        esignSessionRepository.create(documentId, signerId, adapter.getProviderId(), sessionResponse.transactionId(),
-                sentRef.storageKey(), new int[]{0, 0, 0, 0}, "legacy-upload", sessionResponse.gatewayUrl(),
-                sessionResponse.gatewayPayload());
         documentRepository.markPending(documentId);
 
         String actorType = appContext != null ? "APP" : "PLATFORM_USER";

@@ -1,8 +1,5 @@
 package org.tsicoop.sign.esign;
 
-import org.tsicoop.sign.esign.legacyintegration.EmudhraGatewayAdapter;
-import org.tsicoop.sign.esign.legacyintegration.EmudhraGatewayConfig;
-
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -39,7 +36,6 @@ public class ESignAdapterRegistry {
         PROVIDERS.put(SANDBOX, "Aadhaar eSign (TSI Sandbox)");
         PROVIDERS.put("cca_generic", "Aadhaar eSign");
         PROVIDERS.put("emudhra", "Aadhaar eSign (eMudhra)");
-        PROVIDERS.put(EmudhraGatewayConfig.PROVIDER_ID, "Aadhaar eSign (eMudhra)"); // LEGACY INTEGRATION
         PROVIDERS.put("cdac", "Aadhaar eSign (C-DAC)");
         PROVIDERS.put("protean", "Aadhaar eSign (Protean)");
         PROVIDERS.put("vsign", "Aadhaar eSign (VSign)");
@@ -88,9 +84,6 @@ public class ESignAdapterRegistry {
     }
 
     private static ESignAdapter build(String providerId) {
-        if (EmudhraGatewayConfig.PROVIDER_ID.equals(providerId)) { // LEGACY INTEGRATION: document-upload gateway
-            return new EmudhraGatewayAdapter(EmudhraGatewayConfig.fromEnv());
-        }
         return new CcaEsignAdapter(CcaEsignConfig.fromEnv(providerId, PROVIDERS.get(providerId)));
     }
 

@@ -85,13 +85,4 @@
 		<url-pattern>/esign/return/*</url-pattern>
 	</servlet-mapping>
 
-	<!-- LEGACY INTEGRATION: browser return for document-upload providers (eMudhra CoreGateway). -->
-	<servlet>
-		<servlet-name>LegacyEsignReturn</servlet-name>
-		<servlet-class>org.tsicoop.sign.esign.legacyintegration.LegacyEsignReturnServlet</servlet-class>
-	</servlet>
-	<servlet-mapping>
-		<servlet-name>LegacyEsignReturn</servlet-name>
-		<url-pattern>/esign/legacy-return/*</url-pattern>
-	</servlet-mapping>
 </web-app>
