@@ -53,6 +53,60 @@ public class PlatformUserRepository {
         }
     }
 
+    /**
+     * Creates the first user only if platform_users is still empty, with the check and the insert
+     * in one SERIALIZABLE transaction: if two setup requests both see an empty table, Postgres
+     * aborts the loser (SQLState 40001) rather than letting both create an admin.
+     * Returns the new user id, or empty if a user already exists (or this request lost the race).
+     */
+    public Optional<String> createIfNoneExist(String email, String fullName, String passwordHash, String role)
+            throws Exception {
+        Connection con = null;
+        PreparedStatement ps = null;
+        ResultSet rs = null;
+        PoolDB pool = new PoolDB(false);
+        try {
+            con = pool.getConnection();
+            con.setTransactionIsolation(Connection.TRANSACTION_SERIALIZABLE);
+            ps = con.prepareStatement("SELECT 1 FROM platform_users LIMIT 1");
+            rs = ps.executeQuery();
+            boolean exists = rs.next();
+            rs.close();
+            ps.close();
+            if (exists) {
+                con.rollback();
+                return Optional.empty();
+            }
+            ps = con.prepareStatement("INSERT INTO platform_users (email, full_name, password_hash, role) " +
+                    "VALUES (?, ?, ?, ?) RETURNING user_id");
+            ps.setString(1, email);
+            ps.setString(2, fullName);
+            ps.setString(3, passwordHash);
+            ps.setString(4, role);
+            rs = ps.executeQuery();
+            rs.next();
+            String userId = rs.getString("user_id");
+            con.commit();
+            return Optional.of(userId);
+        } catch (java.sql.SQLException e) {
+            if (con != null) con.rollback();
+            if ("40001".equals(e.getSQLState())) {
+                return Optional.empty();
+            }
+            throw e;
+        } finally {
+            // The pooled connection is reused: restore the defaults before handing it back.
+            if (con != null) {
+                try {
+                    con.setTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED);
+                    con.setAutoCommit(true);
+                } catch (Exception ignored) {
+                }
+            }
+            pool.cleanup(rs, ps, con);
+        }
+    }
+
     public Optional<PlatformUserRecord> findByEmail(String email) {
         Connection con = null;
         PreparedStatement ps = null;

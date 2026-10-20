@@ -42,7 +42,11 @@
 
     <form id="setup-form" style="display:none;">
         <h1>First-Time Setup</h1>
-        <p class="sub">No platform admin exists yet. Create the first one to continue.</p>
+        <p class="sub">No platform admin exists yet. Create the first one to continue. You need the <code>TSI_BOOTSTRAP_TOKEN</code> configured on the server.</p>
+        <div class="field">
+            <label for="setup-token">Setup token</label>
+            <input type="password" id="setup-token" autocomplete="off" required>
+        </div>
         <div class="field">
             <label for="setup-name">Full name</label>
             <input type="text" id="setup-name" required>
@@ -95,7 +99,8 @@
             const fullName = document.getElementById("setup-name").value;
             const email = document.getElementById("setup-email").value;
             const password = document.getElementById("setup-password").value;
-            await tsiCall("/api/v1/admin/setup", "setup", { fullName, email, password }, true);
+            const setupToken = document.getElementById("setup-token").value;
+            await tsiCall("/api/v1/admin/setup", "setup", { setupToken, fullName, email, password }, true);
             const result = await tsiCall("/api/v1/admin/auth", "login", { email, password }, true);
             setAuthToken(result.token);
             window.location.href = "dashboard.html";

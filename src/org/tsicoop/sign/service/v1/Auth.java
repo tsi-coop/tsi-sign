@@ -74,6 +74,7 @@ public class Auth implements Action {
 
         ObjectNode json = userJson(user);
         json.put("token", token);
+        InputProcessor.setConsoleSessionCookie(res, token);
         OutputProcessor.send(res, HttpServletResponse.SC_OK, json);
     }
 
@@ -86,6 +87,7 @@ public class Auth implements Action {
                 TokenBlocklist.revoke(jti, JWTUtil.getExpiryFromToken(token).getTime());
             }
         }
+        InputProcessor.clearConsoleSessionCookie(res);
         OutputProcessor.send(res, HttpServletResponse.SC_OK, MAPPER.createObjectNode());
     }
 

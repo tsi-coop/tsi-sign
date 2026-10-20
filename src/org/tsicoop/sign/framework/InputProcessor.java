@@ -2,7 +2,9 @@ package org.tsicoop.sign.framework;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -33,6 +35,42 @@ public class InputProcessor {
     private static final String AUTHORIZATION_HEADER = "Authorization";
     private static final String BEARER_PREFIX = "Bearer ";
     private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    /** HttpOnly cookie carrying the console JWT so ConsoleAuthFilter can gate static pages. */
+    public static final String CONSOLE_SESSION_COOKIE = "console_session";
+    private static final long CONSOLE_SESSION_MAX_AGE_SECONDS = 864000L; // matches JWTUtil EXPIRATION_MS (10 days)
+
+    /**
+     * Sets the console session cookie at login. Built as a raw header because Servlet 5.0's
+     * Cookie API has no SameSite support. Secure is omitted only when TSI_SIGN_ENV=local so
+     * plain-http evaluation keeps working.
+     */
+    public static void setConsoleSessionCookie(HttpServletResponse res, String token) {
+        res.addHeader("Set-Cookie", CONSOLE_SESSION_COOKIE + "=" + token
+                + "; Path=/console; Max-Age=" + CONSOLE_SESSION_MAX_AGE_SECONDS
+                + "; HttpOnly; SameSite=Strict" + secureAttribute());
+    }
+
+    /** Expires the console session cookie. Used on logout. */
+    public static void clearConsoleSessionCookie(HttpServletResponse res) {
+        res.addHeader("Set-Cookie", CONSOLE_SESSION_COOKIE
+                + "=; Path=/console; Max-Age=0; HttpOnly; SameSite=Strict" + secureAttribute());
+    }
+
+    public static String readConsoleSessionCookie(HttpServletRequest req) {
+        Cookie[] cookies = req.getCookies();
+        if (cookies == null) return null;
+        for (Cookie c : cookies) {
+            if (CONSOLE_SESSION_COOKIE.equals(c.getName())) {
+                return c.getValue();
+            }
+        }
+        return null;
+    }
+
+    private static String secureAttribute() {
+        return "local".equals(System.getenv("TSI_SIGN_ENV")) ? "" : "; Secure";
+    }
 
     public static void processInput(HttpServletRequest req) {
         try {

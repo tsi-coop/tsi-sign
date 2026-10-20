@@ -47,6 +47,10 @@ services:
       POSTGRES_USER: "${POSTGRES_USER:-tsi_sign_admin}"
       POSTGRES_PASSWD: "${POSTGRES_PASSWD:-secure_dev_password}"
       TSI_SIGN_ENV: "${TSI_SIGN_ENV:-local}"
+      # No default on purpose: gates the one-time first-admin setup. Unset disables setup
+      # entirely (fails closed, 503). Set it before first boot, complete setup in the console,
+      # then you may unset/rotate it.
+      TSI_BOOTSTRAP_TOKEN: "${TSI_BOOTSTRAP_TOKEN:-}"
       STORAGE_LOCAL_FS_PATH: "${STORAGE_LOCAL_FS_PATH:-/data/tsi-sign/documents}"
       KEYSTORE_PATH: "${KEYSTORE_PATH:-/etc/tsi-sign/keystore.p12}"
       KEYSTORE_TYPE: "${KEYSTORE_TYPE:-PKCS12}"

@@ -24,6 +24,15 @@
 			<param-name>cacheControl</param-name>
 			<param-value>no-cache</param-value>
 		</init-param>
+		<!--
+		  Jetty's bundled webdefault-ee10.xml sets dirAllowed=true, so a directory with no
+		  welcome file would be auto-listed. Welcome-file resolution (/console/ ->
+		  /console/index.html) is tried first and is unaffected.
+		-->
+		<init-param>
+			<param-name>dirAllowed</param-name>
+			<param-value>false</param-value>
+		</init-param>
 	</servlet>
 	<servlet-mapping>
 		<servlet-name>default</servlet-name>
@@ -48,6 +57,22 @@
 	</filter-mapping>
 
 	<!--
+	  Server-side gate for the console HTML pages (deny by default; the public login-flow
+	  pages are allowlisted inside the filter). Independent of the Bearer-token auth that
+	  InterceptingFilter enforces on every /api call.
+	-->
+	<filter>
+		<filter-name>ConsoleAuthFilter</filter-name>
+		<filter-class>org.tsicoop.sign.framework.ConsoleAuthFilter</filter-class>
+	</filter>
+	<filter-mapping>
+		<filter-name>ConsoleAuthFilter</filter-name>
+		<url-pattern>/console/*</url-pattern>
+		<dispatcher>REQUEST</dispatcher>
+		<dispatcher>FORWARD</dispatcher>
+	</filter-mapping>
+
+	<!--
 	  Return leg of the CCA eSign flow: the ESP form-POSTs the signed response back here through
 	  the signer's browser, so it can't use the JSON /api/v1 convention (see EsignReturnServlet).
 	-->
@@ -58,5 +83,15 @@
 	<servlet-mapping>
 		<servlet-name>EsignReturn</servlet-name>
 		<url-pattern>/esign/return/*</url-pattern>
+	</servlet-mapping>
+
+	<!-- LEGACY INTEGRATION: browser return for document-upload providers (eMudhra CoreGateway). -->
+	<servlet>
+		<servlet-name>LegacyEsignReturn</servlet-name>
+		<servlet-class>org.tsicoop.sign.esign.legacyintegration.LegacyEsignReturnServlet</servlet-class>
+	</servlet>
+	<servlet-mapping>
+		<servlet-name>LegacyEsignReturn</servlet-name>
+		<url-pattern>/esign/legacy-return/*</url-pattern>
 	</servlet-mapping>
 </web-app>

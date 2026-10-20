@@ -30,10 +30,11 @@ TSI Sign generates documents from HTML templates, routes them for signature (a l
 **Prerequisites:** Docker and Docker Compose, or Java 17 + Maven for a local build.
 
 ```bash
+export TSI_BOOTSTRAP_TOKEN=$(openssl rand -hex 32)   # required for first-run setup, see below
 docker compose up -d
 ```
 
-On first start against a fresh Postgres volume, the numbered scripts in `db/` run automatically (mounted onto Postgres's own `/docker-entrypoint-initdb.d`, the same mechanism every sibling TSI product uses - no migration-tracking library involved). Open **http://localhost:8088/console/** to complete first-run setup (creates the first Platform Admin) and use the admin console - create an App, issue an API key, author a template, and generate/seal/certify documents entirely from the browser.
+On first start against a fresh Postgres volume, the numbered scripts in `db/` run automatically (mounted onto Postgres's own `/docker-entrypoint-initdb.d`, the same mechanism every sibling TSI product uses - no migration-tracking library involved). Open **http://localhost:8088/console/** to complete first-run setup (creates the first Platform Admin; enter the `TSI_BOOTSTRAP_TOKEN` value when asked) and use the admin console - create an App, issue an API key, author a template, and generate/seal/certify documents entirely from the browser.
 
 ### Environment variables
 
@@ -43,6 +44,7 @@ On first start against a fresh Postgres volume, the numbered scripts in `db/` ru
 | `POSTGRES_USER` | `tsi_sign_admin` | Database user |
 | `POSTGRES_PASSWD` | `secure_dev_password` | Database password |
 | `TSI_SIGN_ENV` | `local` | Deployment environment tag |
+| `TSI_BOOTSTRAP_TOKEN` | *(none)* | Required to complete the one-time first-admin setup. No default: if unset, setup is refused (503) rather than open to anyone who can reach the server. Not needed after the first admin exists |
 | `STORAGE_LOCAL_FS_PATH` | `/data/tsi-sign/documents` | Mount path for the `local_fs` document storage backend (§5.1) |
 | `KEYSTORE_PATH` | `/etc/tsi-sign/keystore.p12` | Local KeyStore for `seal_local` (§7). The image bakes in a self-signed dev keypair here |
 | `KEYSTORE_TYPE` | `PKCS12` | KeyStore format |
@@ -186,3 +188,10 @@ sandbox/                         Mock CCA eSign ESP + CA + TSA for development (
 web/console/                     Admin console (plain HTML/JS, no build step)
 docker-compose.yml, Dockerfile   Local/self-hosted deployment
 ```
+
+## License & Contributions
+
+This project is fully open-source and distributed under the **Apache 2.0 License**. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+### Contributing Back to the Main Project
+Direct commits to the `main` branch are restricted. If you have a bug fix, optimization or feature extension to give back, email a brief summary and a link to your code branch to **admin@tsicoop.org**. Every contribution is manually evaluated before integration.
